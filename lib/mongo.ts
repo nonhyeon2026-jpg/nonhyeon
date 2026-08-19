@@ -10,7 +10,8 @@ import { MongoClient, type Db } from "mongodb";
  */
 
 const CREDENTIALS_FILE = "atlas-credentials.env";
-export const DB_NAME = process.env.MONGODB_DB ?? "nonhyun";
+// ?? 를 쓰면 빈 문자열이 그대로 통과해 db("") 가 되어버린다. || 로 걸러낸다.
+export const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 export const CONSENT_COLLECTION = "consent";
 export const ZONE_COLLECTION = "zones";
 export const ADMIN_COLLECTION = "admins";

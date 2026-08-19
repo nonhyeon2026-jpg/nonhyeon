@@ -14,7 +14,7 @@ import { MongoClient } from "mongodb";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = resolve(ROOT, "lib/consent.json");
 const CREDENTIALS = resolve(ROOT, "atlas-credentials.env");
-const DB_NAME = process.env.MONGODB_DB ?? "nonhyun";
+const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 const COLLECTION = "consent";
 
 /** KEY="value" / KEY=value 형태만 읽는 최소 파서 */

@@ -17,7 +17,7 @@ import { MongoClient } from "mongodb";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CREDENTIALS = resolve(ROOT, "atlas-credentials.env");
-const DB_NAME = process.env.MONGODB_DB ?? "nonhyun";
+const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 const COLLECTION = "admins";
 
 const ADMIN_ID = process.env.ADMIN_ID;

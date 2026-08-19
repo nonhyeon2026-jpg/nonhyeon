@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const env = {
     MONGODB_URI: Boolean(process.env.MONGODB_URI),
-    MONGODB_DB: process.env.MONGODB_DB ?? "(기본값 nonhyun)",
+    // 값이 비어 있는 것과 아예 없는 것을 구분해서 보여준다
+    MONGODB_DB: process.env.MONGODB_DB || "(미설정 → 기본값 nonhyun)",
     NEXT_PUBLIC_NAVER_MAP_CLIENT_ID: Boolean(process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID),
   };
 

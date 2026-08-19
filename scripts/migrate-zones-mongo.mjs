@@ -15,7 +15,7 @@ import { MongoClient } from "mongodb";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE = resolve(ROOT, "data/zones.json");
 const CREDENTIALS = resolve(ROOT, "atlas-credentials.env");
-const DB_NAME = process.env.MONGODB_DB ?? "nonhyun";
+const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 const COLLECTION = "zones";
 
 /** KEY="value" / KEY=value 형태만 읽는 최소 파서 */
