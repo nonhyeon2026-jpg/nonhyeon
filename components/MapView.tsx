@@ -9,6 +9,7 @@ import {
   consentStrokeOpacity,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import { shiftLng } from "@/lib/geo";
 import type { ParcelCollection, ParcelProps, Zone } from "@/lib/types";
 
 /** 지도를 처음 열었을 때의 중심 — 논현동 177-14 필지 */
@@ -77,7 +78,7 @@ export default function MapView({
         props: f.properties,
         // 링 전체 — 두 번째 링부터는 Leaflet 이 구멍으로 그린다
         ring: f.geometry.coordinates.map((r) =>
-          r.map(([lng, lat]) => [lat, lng] as LatLngExpression),
+          r.map(([lng, lat]) => [lat, shiftLng(lng)] as LatLngExpression),
         ) as unknown as Ring,
       })),
     [parcels],

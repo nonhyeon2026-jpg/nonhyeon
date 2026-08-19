@@ -7,6 +7,7 @@ import {
   consentStrokeOpacity,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import { shiftLng } from "@/lib/geo";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
 
 /* 네이버 지도 JS API v3 는 타입 패키지가 없으므로 최소한으로만 선언한다 */
@@ -213,7 +214,7 @@ export default function NaverMapView({
     const poly = new naver.maps.Polygon({
       // 링 전체를 넘긴다 — 두 번째 링부터는 구멍으로 그려진다
       paths: f.geometry.coordinates.map((ring) =>
-        ring.map(([lng, lat]) => new naver.maps.LatLng(lat, lng)),
+        ring.map(([lng, lat]) => new naver.maps.LatLng(lat, shiftLng(lng))),
       ),
       clickable: true,
       strokeWeight: 1,
