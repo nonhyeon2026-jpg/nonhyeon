@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const boundary = await readBoundary();
 
+
   /**
    * DB 가 안 붙어도 지도는 떠야 한다.
    * 서버 컴포넌트에서 예외가 그대로 올라가면 화면 전체가 500 이 되어

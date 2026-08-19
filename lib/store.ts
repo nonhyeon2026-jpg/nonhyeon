@@ -1,10 +1,6 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import boundary from "@/data/boundary.json";
 import { ZONE_COLLECTION, mongoDb } from "./mongo";
 import type { Zone, ZoneMutation } from "./types";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const BOUNDARY_PATH = path.join(DATA_DIR, "boundary.json");
 
 /**
  * 구역 정보는 MongoDB(nonhyun.zones)에 있다. 필지 편입/제외가 곧 DB 갱신이다.
@@ -12,11 +8,15 @@ const BOUNDARY_PATH = path.join(DATA_DIR, "boundary.json");
  * 필지 데이터(public/parcels.json)는 서버를 거치지 않는다.
  * 2MB가 넘어 서버 렌더링 페이로드에 실으면 초기 로딩이 크게 느려지므로
  * 정적 파일로 두고 브라우저가 직접 받아 캐시한다.
- * 행정경계(data/boundary.json)도 바뀌지 않는 자료라 파일로 둔다.
  */
 
+/**
+ * 행정경계는 정적 import 로 가져온다.
+ * fs 로 process.cwd() 아래를 읽으면 서버리스 배포(Vercel)에서 파일이
+ * 함수 번들에 안 들어가 ENOENT 로 페이지 전체가 죽는다. 3KB 라 번들에 넣는 편이 낫다.
+ */
 export async function readBoundary() {
-  return JSON.parse(await fs.readFile(BOUNDARY_PATH, "utf8"));
+  return boundary;
 }
 
 /** DB 문서 → 화면이 쓰는 Zone. _id·order 는 내부용이라 내보내지 않는다 */
