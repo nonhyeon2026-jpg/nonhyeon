@@ -157,3 +157,40 @@ scripts/
   reseed-zones.mjs            필지 교체 후 구역 PNU 정리
   gen-parcels.mjs             샘플 필지 생성기 (키 없이 개발용)
 ```
+
+## 배포 (Vercel)
+
+이 앱은 정적 사이트가 아니다. API 라우트, 서버에서의 MongoDB 조회, 쿠키 인증이 있어
+Node 런타임이 필요하다. GitHub Pages 로는 배포할 수 없다.
+
+1. Vercel 에서 이 GitHub 저장소를 Import 한다 (프레임워크는 Next.js 로 자동 인식된다).
+2. Environment Variables 에 아래를 넣는다. 로컬에서 쓰는 `atlas-credentials.env` 는
+   저장소에 올라가지 않으므로 `MONGODB_URI` 는 반드시 여기에 넣어야 한다.
+
+   | 이름 | 설명 |
+   | --- | --- |
+   | `MONGODB_URI` | Atlas 접속 문자열 (비밀번호 포함) |
+   | `MONGODB_DB` | 데이터베이스 이름 (기본 `nonhyun`) |
+   | `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID` | 네이버 지도 Client ID |
+   | `NEXT_PUBLIC_NAVER_KEY_PARAM` | `ncpKeyId` 또는 `ncpClientId` |
+
+3. MongoDB Atlas → Network Access 에서 `0.0.0.0/0` 을 허용한다.
+   Vercel 은 고정 IP 가 없어서 대역을 좁힐 수 없다.
+4. 네이버 클라우드 콘솔 → Maps 애플리케이션의 "Web 서비스 URL" 에 배포 도메인
+   (`https://<프로젝트>.vercel.app`)을 추가한다. 등록하지 않으면 지도가 인증 실패로 뜨지 않는다.
+5. 첫 배포 후 관리자 계정이 없다면 로컬에서 한 번 넣어둔다.
+
+   ```powershell
+   $env:ADMIN_ID="아이디"; $env:ADMIN_PW="비밀번호"; npm run seed:admin
+   ```
+
+### 참고
+
+- 구역·명부·관리자 계정은 모두 MongoDB(`nonhyun`)에 있다. 배포본과 로컬이 같은 DB 를 본다.
+- `lib/consent.json`, `nonhyun.xlsx` 는 개인정보라 저장소에 올리지 않는다.
+  명부를 갱신하려면 로컬에서 `npm run import:consent` → `npm run migrate:consent` 를 돌린다.
+- 개발 서버를 켠 채로 프로덕션 빌드를 확인하려면 출력 폴더를 분리한다.
+
+  ```bash
+  NEXT_DIST_DIR=.next-build npm run build
+  ```

@@ -16,3 +16,4 @@ nonhyun.xlsx
 
 # 참여의향서 명부 (개인정보). 앱은 MongoDB 에서 읽는다
 lib/consent.json
+.next-build/
