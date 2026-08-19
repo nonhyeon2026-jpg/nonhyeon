@@ -29,6 +29,7 @@ export default function AppShell({
   initialZones,
   boundary,
   consent,
+  dataError,
   naverClientId,
   naverKeyParam,
 }: {
@@ -36,6 +37,8 @@ export default function AppShell({
   boundary: { geometry: { coordinates: number[][][] } };
   /** 서버가 MongoDB 에서 읽어 내려준 참여의향서 명부 */
   consent: ConsentMap;
+  /** DB 조회에 실패했을 때의 안내 (정상이면 null) */
+  dataError: string | null;
   naverClientId: string;
   naverKeyParam: string;
 }) {
@@ -359,6 +362,12 @@ export default function AppShell({
           {/* 지도 오른쪽 플로팅 열 — 제출률 요약 / 지번 검색 / 선택 필지.
               좁은 화면에서는 지도를 다 덮어버려 숨기고 아래 간략 정보로 대신한다 */}
           <div className="pointer-events-none absolute bottom-4 right-4 top-4 z-[1000] hidden w-[280px] flex-col gap-2 md:flex">
+            {dataError && (
+              <div className="pointer-events-auto shrink-0 rounded-xl border border-red-500/40 bg-slate-900/90 px-3 py-2.5 text-xs leading-snug text-red-300 backdrop-blur">
+                {dataError}
+              </div>
+            )}
+
             {parcelError && (
               <div className="pointer-events-auto shrink-0 rounded-xl border border-red-500/40 bg-slate-900/90 px-3 py-2.5 text-xs text-red-300 backdrop-blur">
                 {parcelError}
