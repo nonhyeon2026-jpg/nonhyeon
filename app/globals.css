@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "leaflet/dist/leaflet.css";
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* Leaflet 기본 스타일이 다크 UI와 어울리도록 */
+.leaflet-container {
+  background: #0f172a;
+  font-family: inherit;
+}
+
+.leaflet-control-zoom a {
+  @apply !bg-slate-800 !text-slate-100 !border-slate-700;
+}
+
+.leaflet-control-attribution {
+  @apply !bg-slate-900/80 !text-slate-400;
+}
+
+.leaflet-control-attribution a {
+  @apply !text-slate-300;
+}
+
+/* 스크롤바 */
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  @apply bg-slate-700 rounded-full;
+}

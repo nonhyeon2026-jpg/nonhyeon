@@ -1,0 +1,18 @@
+node_modules/
+.env
+.env.local
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# MongoDB Atlas 접속 정보 — 절대 커밋하지 않는다
+atlas-credentials.env
+*.env.local
+.env.*.local
+
+# 원본 명부 (개인정보). DB 에 올려서 쓴다
+nonhyun.xlsx
+
+# 참여의향서 명부 (개인정보). 앱은 MongoDB 에서 읽는다
+lib/consent.json

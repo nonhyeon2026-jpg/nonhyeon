@@ -1,0 +1,39 @@
+{
+  "name": "nonhyun-redev",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "gen:parcels": "node scripts/gen-parcels.mjs",
+    "import:vworld": "node scripts/import-vworld.mjs",
+    "reseed:zones": "node scripts/reseed-zones.mjs",
+    "dev": "next dev -p 3311",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "import:buildings": "node scripts/import-buildings.mjs",
+    "import:bldrgst": "node scripts/import-bldrgst.mjs",
+    "import:consent": "node scripts/import-consent.mjs",
+    "gen:outlines": "node scripts/gen-zone-outlines.mjs",
+    "migrate:consent": "node scripts/migrate-consent-mongo.mjs",
+    "migrate:zones": "node scripts/migrate-zones-mongo.mjs",
+    "seed:admin": "node scripts/seed-admin-mongo.mjs"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "mongodb": "^6.21.0",
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.6",
+    "typescript": "^5.5.3"
+  }
+}
