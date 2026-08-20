@@ -59,9 +59,6 @@ export default function AdminLogin({
         className="w-[300px] rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
       >
         <h2 className="text-sm font-semibold text-slate-100">관리자 로그인</h2>
-        <p className="mt-1 text-[11px] text-slate-500">
-          구역 편집과 소유자 수 변경에 필요합니다.
-        </p>
 
         <label className="mt-4 block text-[11px] text-slate-400">아이디</label>
         <input
