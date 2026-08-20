@@ -212,7 +212,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <div className="app-viewport flex flex-col overflow-hidden">
       <header className="flex shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900/80 px-5 py-3 backdrop-blur">
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold tracking-tight">

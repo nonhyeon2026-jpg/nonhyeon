@@ -7,6 +7,18 @@
 html,
 body {
   height: 100%;
+  /* 모바일 주소창이 오르내려도 본문이 넘치지 않게 한다 */
+  overscroll-behavior: none;
+}
+
+/**
+ * 화면 전체를 차지하는 최상위 틀.
+ * 모바일 브라우저의 100vh 는 주소창이 보일 때도 "주소창이 숨겨진 높이" 라서
+ * 화면 밖으로 넘친다. dvh 를 쓰되, 지원하지 않는 브라우저를 위해 vh 를 먼저 둔다.
+ */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
 }
 
 body {
