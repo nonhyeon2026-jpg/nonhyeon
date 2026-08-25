@@ -8,6 +8,46 @@ export type ConsentMap = Record<string, ConsentInfo>;
 
 export const EMPTY_CONSENT: ConsentMap = {};
 
+/**
+ * 딸림 지번(sharedPnus)에도 대표 문서를 그대로 걸어 준다.
+ *
+ * 한 집합건물이 176-2·176-3 두 지번에 앉아 있고 건축물대장은 176-2 에만 등재된
+ * 경우가 있다. 176-3 을 빈 칸으로 두면 지도에서 "아무도 안 냈음"(빨강)이 되고
+ * 총 호수 분모에도 1호가 더 붙는다. 같은 문서를 가리키게 해 두면 색칠·표시는
+ * 별도 분기 없이 저절로 맞고, 합계 쪽에서 doc.pnu 로 한 번만 세면 된다.
+ */
+export function expandShared(docs: Iterable<ConsentInfo>): ConsentMap {
+  const map: ConsentMap = {};
+  for (const doc of docs) map[doc.pnu] = doc;
+  // 대표 문서를 먼저 다 걸고 나서 딸림을 건다 — 자기 명부가 있는 지번을 덮지 않게
+  for (const doc of Object.values(map)) {
+    for (const pnu of doc.sharedPnus ?? []) if (!map[pnu]) map[pnu] = doc;
+  }
+  return map;
+}
+
+/** 이 필지가 다른 지번 명부에 딸린 것인지 (대표 지번이면 false) */
+export const isSharedInto = (pnu: string, c: ConsentInfo | undefined) =>
+  Boolean(c && c.pnu !== pnu);
+
+/** 저장된 명부 한 건을 맵에 반영한다. 딸림 지번 키까지 다시 건다 */
+export function applyConsent(map: ConsentMap, doc: ConsentInfo): ConsentMap {
+  const docs = Object.values(map).filter((d) => d.pnu !== doc.pnu);
+  // 다른 문서가 이 문서의 딸림 지번을 물고 있으면 놓게 한다 (한 필지는 한 건물)
+  const claimed = new Set(doc.sharedPnus ?? []);
+  const kept = docs.map((d) =>
+    (d.sharedPnus ?? []).some((p) => claimed.has(p))
+      ? { ...d, sharedPnus: (d.sharedPnus ?? []).filter((p) => !claimed.has(p)) }
+      : d,
+  );
+  return expandShared([...kept, doc]);
+}
+
+/** 명부에서 지번 하나를 뺀다 (딸림 지번 키도 함께 사라진다) */
+export function removeConsent(map: ConsentMap, pnu: string): ConsentMap {
+  return expandShared(Object.values(map).filter((d) => d.pnu !== pnu));
+}
+
 export type ConsentSummary = {
   /** 명부에 한 호라도 올라온 필지 수 */
   parcels: number;
@@ -22,9 +62,12 @@ export function summarize(pnus: Iterable<string>, consent: ConsentMap): ConsentS
   let parcels = 0;
   let submitted = 0;
   let total = 0;
+  // 여러 지번에 걸친 건물은 어느 지번을 골라도 같은 문서를 가리킨다 — 한 번만 센다
+  const counted = new Set<string>();
   for (const pnu of pnus) {
     const c = consent[pnu];
-    if (!c) continue;
+    if (!c || counted.has(c.pnu)) continue;
+    counted.add(c.pnu);
     parcels += 1;
     submitted += c.submitted;
     total += c.total;
@@ -67,6 +110,7 @@ export function summarizeZone(
   let total = 0;
   let submittedParcels = 0;
   let zoneParcels = 0;
+  const counted = new Set<string>();
 
   for (const pnu of pnus) {
     const props = propsOf.get(pnu);
@@ -75,6 +119,10 @@ export function summarizeZone(
 
     const c = consent[pnu];
     if (c) {
+      // 딸림 지번은 대표 지번과 같은 문서라 이미 세어져 있다.
+      // parcelUnits 로 갈음하지도 않는다 — 그 건물의 호수는 대표 쪽에 다 들어 있다.
+      if (counted.has(c.pnu)) continue;
+      counted.add(c.pnu);
       submitted += c.submitted;
       total += c.total;
       submittedParcels += 1;

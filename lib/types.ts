@@ -95,4 +95,24 @@ export type ConsentInfo = {
   wholeBuilding: boolean;
   /** 총 호수를 건축물대장에서 못 구해 제출 호수로 갈음했는지 */
   totalEstimated: boolean;
+  /**
+   * 한 집합건물이 여러 지번에 걸쳐 있고 건축물대장은 이 지번에만 등재된 경우,
+   * 같은 건물이 앉은 나머지 지번들(딸림 지번)의 PNU. 예) 176-2 문서에 176-3.
+   * 딸림 지번은 이 문서를 그대로 쓰고 합계에서는 한 번만 센다.
+   */
+  sharedPnus?: string[];
+};
+
+/**
+ * 관리자가 화면에서 입력하는 참여의향서 값.
+ * pnu·jibun 과 제출 호수는 서버에서 채우거나 다시 계산한다 (lib/consentStore.ts).
+ */
+export type ConsentInput = {
+  label?: string;
+  total?: number;
+  submitted?: number;
+  units?: string[];
+  wholeBuilding?: boolean;
+  totalEstimated?: boolean;
+  sharedPnus?: string[];
 };

@@ -16,7 +16,8 @@
     "gen:outlines": "node scripts/gen-zone-outlines.mjs",
     "migrate:consent": "node scripts/migrate-consent-mongo.mjs",
     "migrate:zones": "node scripts/migrate-zones-mongo.mjs",
-    "seed:admin": "node scripts/seed-admin-mongo.mjs"
+    "seed:admin": "node scripts/seed-admin-mongo.mjs",
+    "link:consent": "node scripts/link-consent.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

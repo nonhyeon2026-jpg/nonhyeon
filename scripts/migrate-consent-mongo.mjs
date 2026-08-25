@@ -60,9 +60,23 @@ try {
   await client.connect();
   const col = client.db(DB_NAME).collection(COLLECTION);
 
+  /**
+   * 엑셀에는 없고 화면에서 손으로 넣은 값은 덮어쓰면 안 된다.
+   * sharedPnus(여러 지번에 걸친 집합건물 묶음)가 그렇다 — 통째로 replaceOne 하면 날아간다.
+   */
+  const linked = new Map(
+    (await col.find({ sharedPnus: { $exists: true, $ne: [] } }, { projection: { sharedPnus: 1 } }).toArray()).map(
+      (d) => [d._id, d.sharedPnus],
+    ),
+  );
+
   const result = await col.bulkWrite(
     docs.map((doc) => ({
-      replaceOne: { filter: { _id: doc._id }, replacement: doc, upsert: true },
+      replaceOne: {
+        filter: { _id: doc._id },
+        replacement: linked.has(doc._id) ? { ...doc, sharedPnus: linked.get(doc._id) } : doc,
+        upsert: true,
+      },
     })),
     { ordered: false },
   );

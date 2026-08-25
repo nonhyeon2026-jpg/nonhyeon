@@ -8,8 +8,16 @@ import ConsentSummary from "./ConsentSummary";
 import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
+import { applyConsent, removeConsent as dropConsent } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
-import type { ParcelCollection, ParcelProps, Zone, ZoneMutation } from "@/lib/types";
+import type {
+  ConsentInfo,
+  ConsentInput,
+  ParcelCollection,
+  ParcelProps,
+  Zone,
+  ZoneMutation,
+} from "@/lib/types";
 
 const loading = (
   <div className="flex h-full items-center justify-center bg-slate-900 text-sm text-slate-400">
@@ -28,7 +36,7 @@ const EMPTY: ParcelCollection = { type: "FeatureCollection", features: [] };
 export default function AppShell({
   initialZones,
   boundary,
-  consent,
+  consent: initialConsent,
   dataError,
   naverClientId,
   naverKeyParam,
@@ -43,6 +51,8 @@ export default function AppShell({
   naverKeyParam: string;
 }) {
   const [parcels, setParcels] = useState<ParcelCollection>(EMPTY);
+  /** 관리자가 명부를 고치면 여기서 바로 갈아끼운다 — 새로고침 없이 지도 색까지 따라간다 */
+  const [consent, setConsent] = useState<ConsentMap>(initialConsent);
   const [parcelError, setParcelError] = useState<string | null>(null);
   const [zones, setZones] = useState<Zone[]>(initialZones);
   const [visibleZoneIds, setVisibleZoneIds] = useState<Set<string>>(
@@ -190,6 +200,56 @@ export default function AppShell({
       if (ok) flash(`총 소유자 수를 ${owners.toLocaleString()}명으로 저장했습니다.`);
     },
     [mutate, flash],
+  );
+
+  /** 지번 하나의 참여의향서 정보를 저장한다. 성공하면 true */
+  const saveConsent = useCallback(
+    async (input: ConsentInput & { pnu: string; jibun: string }) => {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/consent", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "저장에 실패했습니다");
+        const saved = data as ConsentInfo;
+        // 같은 건물로 묶인 딸림 지번 키까지 다시 걸어 지도 색이 바로 따라오게 한다
+        setConsent((prev) => applyConsent(prev, saved));
+        flash(`논현동 ${saved.jibun} 참여의향서 ${saved.submitted}/${saved.total}호를 저장했습니다.`);
+        return true;
+      } catch (e) {
+        flash(`⚠️ ${(e as Error).message}`);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [flash],
+  );
+
+  /** 명부에서 지번을 뺀다 (제출 0호로 되돌린다) */
+  const removeConsent = useCallback(
+    async (pnu: string) => {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/consent?pnu=${encodeURIComponent(pnu)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "삭제에 실패했습니다");
+        setConsent((prev) => dropConsent(prev, pnu));
+        flash("명부에서 뺐습니다.");
+        return true;
+      } catch (e) {
+        flash(`⚠️ ${(e as Error).message}`);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [flash],
   );
 
   /** 관리자 아이콘: 꺼져 있으면 로그인 창을, 켜져 있으면 로그아웃 */
@@ -394,6 +454,10 @@ export default function AppShell({
               selected={selected}
               setSelected={setSelected}
               onFocusParcel={focusParcel}
+              adminMode={adminMode}
+              busy={busy}
+              onSaveConsent={saveConsent}
+              onRemoveConsent={removeConsent}
             />
           </div>
 

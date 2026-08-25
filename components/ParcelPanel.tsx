@@ -1,10 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { consentColor, summarize } from "@/lib/consent";
+import ConsentEditor from "./ConsentEditor";
+import { consentColor, isSharedInto, summarize } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
-import type { ParcelCollection, ParcelProps, Zone } from "@/lib/types";
+import type { ConsentInput, ParcelCollection, ParcelProps, Zone } from "@/lib/types";
+
+/** 관리자가 명부를 고칠 때 쓰는 저장·삭제 함수. 성공하면 true */
+export type ConsentSave = (
+  input: ConsentInput & { pnu: string; jibun: string },
+) => Promise<boolean>;
+export type ConsentRemove = (pnu: string) => Promise<boolean>;
 
 /** YYYYMMDD → YYYY.MM.DD */
 const formatDate = (d: string) => `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}`;
@@ -12,12 +19,180 @@ const formatDate = (d: string) => `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6
 /** 사용승인일로부터 경과 연수 */
 const buildingAge = (d: string) => new Date().getFullYear() - Number(d.slice(0, 4));
 
+/**
+ * 이 필지를 다른 지번의 집합건물에 딸림으로 붙인다.
+ *
+ * 대표 지번 문서의 sharedPnus 에 이 필지를 넣는 일이라, 고치는 대상은 대표 문서다.
+ * 딸림 쪽에 따로 명부를 만들면 같은 건물이 두 번 세어지므로 그 길을 막고 여기로 보낸다.
+ */
+function ConsentLinkForm({
+  parcel,
+  consent,
+  busy,
+  pnuOfJibun,
+  onSaveConsent,
+  onClose,
+}: {
+  parcel: ParcelProps;
+  consent: ConsentMap;
+  busy: boolean;
+  pnuOfJibun: (jibun: string) => string | null;
+  onSaveConsent: ConsentSave;
+  onClose: () => void;
+}) {
+  const [jibun, setJibun] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    const target = jibun.trim();
+    const pnu = target ? pnuOfJibun(target) : null;
+    if (!pnu) {
+      setError(`지적도에 없는 지번입니다: ${target || "(비어 있음)"}`);
+      return;
+    }
+    if (pnu === parcel.pnu) {
+      setError("자기 자신에는 묶을 수 없습니다.");
+      return;
+    }
+    const owner = consent[pnu];
+    // 대표 지번은 참여의향서가 등록된 지번이어야 한다 — 빈 지번끼리는 묶을 것이 없다
+    if (!owner) {
+      setError(`논현동 ${target} 은 명부에 없습니다. 그 지번의 참여의향서를 먼저 입력하세요.`);
+      return;
+    }
+    setError(null);
+    const ok = await onSaveConsent({
+      ...owner,
+      sharedPnus: [...(owner.sharedPnus ?? []), parcel.pnu],
+    });
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="mt-1 rounded border border-amber-500/40 bg-slate-950/80 px-2 py-2 text-[11px]">
+      <div className="mb-1 font-semibold text-amber-300">다른 지번과 묶기</div>
+      <p className="mb-1.5 text-[10px] leading-relaxed text-slate-400">
+        논현동 {parcel.jibun} 위의 건물이 다른 지번에 등재돼 있다면, 그 대표 지번을 적으세요.
+        이 필지는 대표의 명부를 그대로 쓰고 총 호수는 한 번만 셉니다.
+      </p>
+      <input
+        value={jibun}
+        onChange={(e) => {
+          setJibun(e.target.value);
+          setError(null);
+        }}
+        placeholder="대표 지번 (예: 176-2)"
+        className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-100 outline-none focus:border-amber-500"
+      />
+      {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="rounded bg-amber-600 px-2.5 py-1 text-[11px] font-medium text-white transition hover:bg-amber-500 disabled:opacity-50"
+        >
+          묶기
+        </button>
+        <button
+          onClick={onClose}
+          className="rounded border border-slate-700 px-2.5 py-1 text-[11px] text-slate-300 transition hover:bg-slate-800"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 선택한 필지의 참여의향서 제출 현황 */
-function ConsentCard({ pnu, consent }: { pnu: string; consent: ConsentMap }) {
-  const c = consent[pnu];
+function ConsentCard({
+  parcel,
+  consent,
+  adminMode,
+  busy,
+  onSaveConsent,
+  onRemoveConsent,
+  propsOf,
+  pnuOfJibun,
+  jibunOfPnu,
+}: {
+  parcel: ParcelProps;
+  consent: ConsentMap;
+  adminMode: boolean;
+  busy: boolean;
+  onSaveConsent: ConsentSave;
+  onRemoveConsent: ConsentRemove;
+  propsOf: Map<string, ParcelProps>;
+  pnuOfJibun: (jibun: string) => string | null;
+  jibunOfPnu: (pnu: string) => string | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const c = consent[parcel.pnu];
+
+  /**
+   * 여러 지번에 걸친 건물의 딸림 지번이면 대표 지번의 명부를 보여주고,
+   * 고칠 때도 대표 문서를 고친다 — 딸림 쪽에 따로 명부를 만들면 이중 계산이 된다.
+   */
+  const shared = isSharedInto(parcel.pnu, c);
+  const owner = shared ? (propsOf.get(c!.pnu) ?? parcel) : parcel;
+
+  if (linking) {
+    return (
+      <ConsentLinkForm
+        parcel={parcel}
+        consent={consent}
+        busy={busy}
+        pnuOfJibun={pnuOfJibun}
+        onSaveConsent={onSaveConsent}
+        onClose={() => setLinking(false)}
+      />
+    );
+  }
+
+  if (editing) {
+    return (
+      <ConsentEditor
+        parcel={owner}
+        consent={c}
+        busy={busy}
+        onSave={onSaveConsent}
+        onDelete={() => onRemoveConsent(owner.pnu)}
+        onClose={() => setEditing(false)}
+        pnuOfJibun={pnuOfJibun}
+        jibunOfPnu={jibunOfPnu}
+      />
+    );
+  }
+
+  /** 관리자일 때만 뜨는 입력·수정 버튼 */
+  const editButton = adminMode ? (
+    <button
+      onClick={() => setEditing(true)}
+      className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400 transition hover:border-emerald-500 hover:text-emerald-300"
+    >
+      {c ? "수정" : "입력"}
+    </button>
+  ) : null;
+
   if (!c) {
     return (
-      <div className="mt-1 text-[11px] text-slate-600">참여의향서 제출 없음</div>
+      <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-600">
+        참여의향서 제출 없음
+        {adminMode && (
+          <span className="ml-auto flex items-center gap-1">
+            {editButton}
+            {/* 옆 지번 건물의 일부인 필지는 자기 명부를 만들면 안 된다 — 묶는 길을 나란히 둔다 */}
+            <button
+              onClick={() => setLinking(true)}
+              title="이 필지 위 건물이 다른 지번에 등재돼 있을 때"
+              className="rounded border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400 transition hover:border-amber-500 hover:text-amber-300"
+            >
+              묶기
+            </button>
+          </span>
+        )}
+      </div>
     );
   }
   const ratio = Math.round((c.submitted / c.total) * 100);
@@ -29,7 +204,27 @@ function ConsentCard({ pnu, consent }: { pnu: string; consent: ConsentMap }) {
           {c.submitted}/{c.total}호
         </span>
         <span className="ml-auto text-slate-500">{ratio}%</span>
+        {editButton}
       </div>
+      {shared && (
+        <div className="mt-1 flex items-center gap-1.5 text-[10px] text-amber-300/80">
+          <span>논현동 {c.jibun}와 한 건물 — 같은 명부를 씁니다</span>
+          {adminMode && (
+            <button
+              onClick={() =>
+                onSaveConsent({
+                  ...c,
+                  sharedPnus: (c.sharedPnus ?? []).filter((p) => p !== parcel.pnu),
+                })
+              }
+              disabled={busy}
+              className="ml-auto shrink-0 text-slate-500 transition hover:text-red-400 disabled:opacity-50"
+            >
+              묶음 해제
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div
           className="h-full rounded-full"
@@ -79,6 +274,10 @@ export default function ParcelPanel({
   selected,
   setSelected,
   onFocusParcel,
+  adminMode,
+  busy,
+  onSaveConsent,
+  onRemoveConsent,
 }: {
   parcels: ParcelCollection;
   consent: ConsentMap;
@@ -87,8 +286,21 @@ export default function ParcelPanel({
   selected: Set<string>;
   setSelected: Dispatch<SetStateAction<Set<string>>>;
   onFocusParcel: (props: ParcelProps, additive?: boolean) => void;
+  adminMode: boolean;
+  busy: boolean;
+  onSaveConsent: ConsentSave;
+  onRemoveConsent: ConsentRemove;
 }) {
   const [query, setQuery] = useState("");
+
+  /** 지번 ↔ PNU. 같은 건물로 묶을 지번을 화면에서는 지번으로 입력받는다 */
+  const byJibun = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of parcels.features) m.set(f.properties.jibun, f.properties.pnu);
+    return m;
+  }, [parcels]);
+  const pnuOfJibun = useCallback((jibun: string) => byJibun.get(jibun.trim()) ?? null, [byJibun]);
+  const jibunOfPnu = useCallback((pnu: string) => propsOf.get(pnu)?.jibun ?? null, [propsOf]);
 
   const results = useMemo(() => {
     const q = query.trim();
@@ -264,7 +476,17 @@ export default function ParcelPanel({
                   ) : (
                     <div className="mt-1 text-[11px] text-slate-600">건물 정보 없음</div>
                   )}
-                  <ConsentCard pnu={p.pnu} consent={consent} />
+                  <ConsentCard
+                    parcel={p}
+                    consent={consent}
+                    adminMode={adminMode}
+                    busy={busy}
+                    onSaveConsent={onSaveConsent}
+                    onRemoveConsent={onRemoveConsent}
+                    propsOf={propsOf}
+                    pnuOfJibun={pnuOfJibun}
+                    jibunOfPnu={jibunOfPnu}
+                  />
                   <div className="mt-1 text-[10px] text-slate-600">PNU {p.pnu}</div>
                 </li>
               );

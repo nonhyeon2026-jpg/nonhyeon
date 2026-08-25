@@ -1,6 +1,6 @@
 "use client";
 
-import { consentColor, summarize } from "@/lib/consent";
+import { consentColor, isSharedInto, summarize } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps, Zone } from "@/lib/types";
 
@@ -66,8 +66,14 @@ export default function ParcelBrief({
               {c.submitted}/{c.total}호
             </span>
             <span className="text-[11px] text-slate-500">{ratio}%</span>
-            {c.wholeBuilding && (
-              <span className="ml-auto text-[10px] text-slate-500">통건물 제출</span>
+            {isSharedInto(only.pnu, c) ? (
+              <span className="ml-auto text-[10px] text-amber-300/80">
+                논현동 {c.jibun}와 한 건물
+              </span>
+            ) : (
+              c.wholeBuilding && (
+                <span className="ml-auto text-[10px] text-slate-500">통건물 제출</span>
+              )
             )}
           </div>
         ) : (
