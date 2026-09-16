@@ -60,22 +60,42 @@ export default function ParcelBrief({
 
       {only ? (
         c ? (
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="text-[11px] text-slate-400">참여의향서</span>
-            <span className="text-sm font-semibold" style={{ color: consentColor(ratio!) }}>
-              {c.submitted}/{c.total}호
-            </span>
-            <span className="text-[11px] text-slate-500">{ratio}%</span>
-            {isSharedInto(only.pnu, c) ? (
-              <span className="ml-auto text-[10px] text-amber-300/80">
-                논현동 {c.jibun}와 한 건물
+          <>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">참여의향서</span>
+              <span className="text-sm font-semibold" style={{ color: consentColor(ratio!) }}>
+                {c.submitted}/{c.total}호
               </span>
+              <span className="text-[11px] text-slate-500">{ratio}%</span>
+              {isSharedInto(only.pnu, c) ? (
+                <span className="ml-auto text-[10px] text-amber-300/80">
+                  논현동 {c.jibun}와 한 건물
+                </span>
+              ) : (
+                c.wholeBuilding &&
+                c.units.length > 0 && (
+                  <span className="ml-auto text-[10px] text-slate-500">통건물 제출</span>
+                )
+              )}
+            </div>
+            {/* 제출한 호 목록. 호가 많은 집합건물도 지도를 덮지 않게 높이를 묶고 안에서 스크롤한다 */}
+            {c.units.length > 0 ? (
+              <div className="thin-scroll mt-1.5 flex max-h-28 flex-wrap gap-1 overflow-y-auto">
+                {c.units.map((u, i) => (
+                  <span
+                    key={`${u}-${i}`}
+                    className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-300"
+                  >
+                    {u}
+                  </span>
+                ))}
+              </div>
             ) : (
-              c.wholeBuilding && (
-                <span className="ml-auto text-[10px] text-slate-500">통건물 제출</span>
-              )
+              <div className="mt-1 text-[10px] text-slate-500">
+                {c.wholeBuilding ? "통건물 소유자 제출 (전 호 동의)" : "호 구분 없음"}
+              </div>
             )}
-          </div>
+          </>
         ) : (
           <div className="mt-1.5 text-[11px] text-slate-500">참여의향서 제출 없음</div>
         )
