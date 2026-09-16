@@ -6,6 +6,16 @@ import type { ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
 
 /**
+ * 주택 유형 한 글자 표시. 현장에서 가장 자주 가르는 세 유형만 둔다.
+ * Tailwind 가 클래스를 찾을 수 있게 색 클래스는 문자열 그대로 적는다.
+ */
+const HOUSING_BADGE: Record<string, { label: string; className: string }> = {
+  단독주택: { label: "단", className: "bg-sky-500/20 text-sky-300 ring-sky-400/70" },
+  다가구주택: { label: "다", className: "bg-amber-500/20 text-amber-300 ring-amber-400/70" },
+  다세대주택: { label: "세", className: "bg-violet-500/20 text-violet-300 ring-violet-400/70" },
+};
+
+/**
  * 모바일에서 필지를 골랐을 때 지도 아래에 뜨는 간략 정보.
  * 오른쪽 패널은 좁은 화면에서 지도를 다 덮어버려 숨기고, 꼭 필요한 것만 여기 담는다.
  */
@@ -29,10 +39,22 @@ export default function ParcelBrief({
   const only = list.length === 1 ? list[0] : null;
   const c = only ? consent[only.pnu] : undefined;
   const ratio = c ? Math.round((c.submitted / c.total) * 100) : null;
+  const housingType = only?.building?.housingType;
+  const badge = housingType ? HOUSING_BADGE[housingType] : undefined;
 
   return (
     <div className="pointer-events-auto w-[min(92vw,360px)] rounded-xl border border-slate-700 bg-slate-900/95 px-3 py-2.5 text-left shadow-xl backdrop-blur">
       <div className="flex items-center gap-2">
+        {badge && (
+          <span
+            role="img"
+            title={housingType!}
+            aria-label={housingType!}
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ${badge.className}`}
+          >
+            {badge.label}
+          </span>
+        )}
         <span className="truncate text-sm font-semibold text-slate-100">
           {only ? `논현동 ${only.jibun}` : `${list.length}필지 선택`}
         </span>
