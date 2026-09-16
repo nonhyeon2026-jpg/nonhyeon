@@ -6,6 +6,7 @@ import {
   consentColor,
   consentFillOpacity,
   consentStrokeOpacity,
+  unsubmittedColor,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { shiftLng } from "@/lib/geo";
@@ -342,8 +343,9 @@ export default function NaverMapView({
       let style: Record<string, unknown>;
 
       if (ratio !== null) {
-        // 제출률 색이 구역 색보다 우선한다 — 두 색을 겹치면 어느 쪽도 읽히지 않는다
-        const color = consentColor(ratio);
+        // 제출률 색이 구역 색보다 우선한다 — 두 색을 겹치면 어느 쪽도 읽히지 않는다.
+        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 붉은 계열 안에서 색을 나눈다.
+        const color = consent ? consentColor(ratio) : unsubmittedColor(f.properties.zoning);
         style = {
           fillColor: color,
           fillOpacity: consentFillOpacity(ratio),

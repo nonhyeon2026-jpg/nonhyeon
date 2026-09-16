@@ -3,6 +3,7 @@
 import { consentColor, isSharedInto, summarize } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps, Zone } from "@/lib/types";
+import { zoningText } from "@/lib/zoning";
 
 /**
  * 모바일에서 필지를 골랐을 때 지도 아래에 뜨는 간략 정보.
@@ -52,6 +53,7 @@ export default function ParcelBrief({
           <>
             {only.category} · {only.area.toLocaleString()}㎡
             {only.building?.housingType && ` · ${only.building.housingType}`}
+            {zoningText(only) && ` · ${zoningText(only)}`}
           </>
         ) : (
           <>합계 {list.reduce((sum, p) => sum + p.area, 0).toLocaleString()}㎡</>

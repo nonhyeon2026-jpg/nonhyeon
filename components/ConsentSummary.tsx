@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CONSENT_GRADIENT, consentColor, summarizeZone } from "@/lib/consent";
+import { CONSENT_GRADIENT, consentColor, residentialColor, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import { RESIDENTIAL_CLASSES } from "@/lib/zoning";
 import type { ParcelProps, Zone } from "@/lib/types";
 
 /**
@@ -130,6 +131,19 @@ function ZoneCard({
         <div className="mt-1 flex justify-between text-[10px] text-slate-500">
           <span>필지별 제출률 0%</span>
           <span>100%</span>
+        </div>
+        {/* 제출이 없는 구역 필지는 용도지역별로 색이 조금씩 다르다 */}
+        <div className="mt-1.5 flex items-center gap-2.5 whitespace-nowrap text-[10px] text-slate-500">
+          <span>제출 없음 · 일반주거</span>
+          {RESIDENTIAL_CLASSES.map((cls) => (
+            <span key={cls} className="flex items-center gap-1">
+              <span
+                className="h-2.5 w-2.5 rounded-sm"
+                style={{ background: residentialColor(cls), opacity: 0.9 }}
+              />
+              {cls}종
+            </span>
+          ))}
         </div>
       </div>
 

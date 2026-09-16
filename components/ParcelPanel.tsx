@@ -6,6 +6,7 @@ import ConsentEditor from "./ConsentEditor";
 import { consentColor, isSharedInto, summarize } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ConsentInput, ParcelCollection, ParcelProps, Zone } from "@/lib/types";
+import { zoningText } from "@/lib/zoning";
 
 /** 관리자가 명부를 고칠 때 쓰는 저장·삭제 함수. 성공하면 true */
 export type ConsentSave = (
@@ -427,6 +428,11 @@ export default function ParcelPanel({
                     {p.category} · {p.area.toLocaleString()}㎡
                     {p.jiga ? ` · 공시지가 ${p.jiga.toLocaleString()}원/㎡` : ""}
                   </div>
+                  {zoningText(p) && (
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      용도지역 {zoningText(p)}
+                    </div>
+                  )}
                   {p.building ? (
                     <div className="mt-1 rounded bg-slate-900/80 px-1.5 py-1 text-[11px] text-slate-400">
                       <span className="text-slate-200">

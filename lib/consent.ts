@@ -1,4 +1,6 @@
 import type { ConsentInfo, ParcelProps } from "./types";
+import { residentialClass } from "./zoning";
+import type { ResidentialClass } from "./zoning";
 
 /**
  * pnu → 참여의향서 제출 현황. 명부에 없는 필지는 키가 없다 (제출 0호).
@@ -181,11 +183,43 @@ export function consentStrokeOpacity(ratio: number): number {
   return 0.6 + 0.4 * r;
 }
 
+/**
+ * 참여의향서가 없는 구역 필지를 용도지역 1·2·3종별로 나눠 칠하는 색상(hue).
+ *
+ * 셋 다 "아직 안 냈음" 이라 제출 필지의 연두~초록(90°~120°)과 겹치지 않는
+ * 붉은 쪽에 모으고, 그 안에서만 자주(1종) · 빨강(2종) · 주황(3종)으로 조금씩 민다.
+ */
+const CLASS_HUE: Record<ResidentialClass, number> = { 1: 325, 2: 0, 3: 26 };
+
+export function residentialColor(cls: ResidentialClass): string {
+  return hslToHex(CLASS_HUE[cls], 0.52, 0.4);
+}
+
+/**
+ * 구역에 편입됐지만 참여의향서가 없는 필지의 색.
+ * 1·2·3종 일반주거가 아니면(상업·준주거 등) 지금까지처럼 0% 색을 쓴다.
+ */
+export function unsubmittedColor(zoning?: string | null): string {
+  const cls = residentialClass(zoning);
+  return cls ? residentialColor(cls) : consentColor(0);
+}
+
 function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = l - c / 2;
-  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : [0, c, x];
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x];
   const hex = (v: number) =>
     Math.round((v + m) * 255)
       .toString(16)

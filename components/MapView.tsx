@@ -7,6 +7,7 @@ import {
   consentColor,
   consentFillOpacity,
   consentStrokeOpacity,
+  unsubmittedColor,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { shiftLng } from "@/lib/geo";
@@ -132,15 +133,23 @@ export default function MapView({
             ? 0
             : null;
 
+        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 붉은 계열 안에서 색을 나눈다
+        const consentFill =
+          consentRatio === null
+            ? null
+            : consent
+              ? consentColor(consentRatio)
+              : unsubmittedColor(props.zoning);
+
         const base =
           consentRatio !== null
             ? {
                 // 제출률 색이 구역 색보다 우선한다
-                color: consentColor(consentRatio),
+                color: consentFill!,
                 // 명부에 제출 기록이 있는 필지는 테두리를 한 겹 굵게 해 눈에 띄게 한다
                 weight: consent ? 2 : 1,
                 opacity: consentStrokeOpacity(consentRatio),
-                fillColor: consentColor(consentRatio),
+                fillColor: consentFill!,
                 fillOpacity: consentFillOpacity(consentRatio),
               }
           : showConsent

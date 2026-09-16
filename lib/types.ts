@@ -39,6 +39,13 @@ export type ParcelProps = {
   jiga?: number | null;
   /** VWorld 건물정보(LT_C_BLDGINFO) 를 공간조인해 붙인 값. 건물이 없으면 없음 */
   building?: BuildingInfo;
+  /**
+   * 용도지역 (제2종일반주거지역 …). 둘 이상에 걸치면 면적이 넓은 쪽.
+   * VWorld 용도지역(LT_C_UQ111) 을 공간조인해 붙인다 (scripts/import-zoning.mjs)
+   */
+  zoning?: string | null;
+  /** 둘 이상의 용도지역에 걸친 필지의 면적 비율 (넓은 순, share 는 0~1) */
+  zoningMix?: { name: string; share: number }[];
   /** [lat, lng] */
   centroid: [number, number];
 };
