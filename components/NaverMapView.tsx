@@ -6,7 +6,7 @@ import {
   consentColor,
   consentFillOpacity,
   consentStrokeOpacity,
-  unsubmittedColor,
+  unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { shiftLng } from "@/lib/geo";
@@ -342,18 +342,27 @@ export default function NaverMapView({
        */
       let style: Record<string, unknown>;
 
-      if (ratio !== null) {
-        // 제출률 색이 구역 색보다 우선한다 — 두 색을 겹치면 어느 쪽도 읽히지 않는다.
-        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 붉은 계열 안에서 색을 나눈다.
-        const color = consent ? consentColor(ratio) : unsubmittedColor(f.properties.zoning);
+      if (consent) {
+        // 제출률 색이 구역 색보다 우선한다 — 두 색을 겹치면 어느 쪽도 읽히지 않는다
+        const color = consentColor(ratio!);
         style = {
           fillColor: color,
-          fillOpacity: consentFillOpacity(ratio),
+          fillOpacity: consentFillOpacity(ratio!),
           strokeColor: color,
           // 명부에 제출 기록이 있는 필지는 테두리를 한 겹 굵게 해 눈에 띄게 한다
-          strokeWeight: consent ? 2.2 : 1.2,
+          strokeWeight: 2.2,
           // 참여율이 낮은 필지는 테두리도 함께 물러난다
-          strokeOpacity: consentStrokeOpacity(ratio),
+          strokeOpacity: consentStrokeOpacity(ratio!),
+        };
+      } else if (ratio !== null) {
+        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 색을 나눈다
+        const u = unsubmittedStyle(f.properties.zoning);
+        style = {
+          fillColor: u.color,
+          fillOpacity: u.fillOpacity,
+          strokeColor: u.color,
+          strokeWeight: 1.2,
+          strokeOpacity: u.strokeOpacity,
         };
       } else if (showConsent) {
         // 제출률 레이어가 켜져 있을 때 명부에 없는 필지까지 구역 색(빨강)으로 두면

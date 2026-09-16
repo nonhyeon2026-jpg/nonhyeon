@@ -184,24 +184,43 @@ export function consentStrokeOpacity(ratio: number): number {
 }
 
 /**
- * 참여의향서가 없는 구역 필지를 용도지역 1·2·3종별로 나눠 칠하는 색상(hue).
+ * 참여의향서가 없는 구역 필지를 용도지역 1·2·3종별로 나눠 칠하는 색 [hue, 채도, 명도].
  *
- * 셋 다 "아직 안 냈음" 이라 제출 필지의 연두~초록(90°~120°)과 겹치지 않는
- * 붉은 쪽에 모으고, 그 안에서만 자주(1종) · 빨강(2종) · 주황(3종)으로 조금씩 민다.
+ * 붉은 계열 안에서만 색상을 조금씩 밀었더니(자주·빨강·주황) 옅게 깔린 지도 위에서
+ * 1종과 2종이 구분되지 않았다. 제출 필지의 연두~초록(90°~120°)만 피하고
+ * 색상환에서 멀리 떨어뜨린다 — 파랑(1종) · 빨강(2종) · 주황(3종).
  */
-const CLASS_HUE: Record<ResidentialClass, number> = { 1: 325, 2: 0, 3: 26 };
+const CLASS_COLOR: Record<ResidentialClass, [number, number, number]> = {
+  1: [214, 0.72, 0.46],
+  2: [354, 0.66, 0.46],
+  3: [32, 0.9, 0.48],
+};
 
 export function residentialColor(cls: ResidentialClass): string {
-  return hslToHex(CLASS_HUE[cls], 0.52, 0.4);
+  return hslToHex(...CLASS_COLOR[cls]);
 }
 
 /**
- * 구역에 편입됐지만 참여의향서가 없는 필지의 색.
- * 1·2·3종 일반주거가 아니면(상업·준주거 등) 지금까지처럼 0% 색을 쓴다.
+ * 구역에 편입됐지만 참여의향서가 없는 필지의 색과 불투명도.
+ *
+ * 1·2·3종은 색으로 구분돼야 하므로 제출 0% 필지(0.14)보다 진하게 채운다.
+ * 그래도 제출 필지(0.45~)보다는 옅게 둬 초록이 먼저 눈에 들어오게 한다.
+ * 1·2·3종 일반주거가 아니면(상업·준주거 등) 지금까지처럼 0% 색으로 물린다.
  */
-export function unsubmittedColor(zoning?: string | null): string {
+export function unsubmittedStyle(zoning?: string | null): {
+  color: string;
+  fillOpacity: number;
+  strokeOpacity: number;
+} {
   const cls = residentialClass(zoning);
-  return cls ? residentialColor(cls) : consentColor(0);
+  if (!cls) {
+    return {
+      color: consentColor(0),
+      fillOpacity: consentFillOpacity(0),
+      strokeOpacity: consentStrokeOpacity(0),
+    };
+  }
+  return { color: residentialColor(cls), fillOpacity: 0.3, strokeOpacity: 0.7 };
 }
 
 function hslToHex(h: number, s: number, l: number): string {

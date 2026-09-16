@@ -7,7 +7,7 @@ import {
   consentColor,
   consentFillOpacity,
   consentStrokeOpacity,
-  unsubmittedColor,
+  unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { shiftLng } from "@/lib/geo";
@@ -133,25 +133,29 @@ export default function MapView({
             ? 0
             : null;
 
-        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 붉은 계열 안에서 색을 나눈다
-        const consentFill =
-          consentRatio === null
-            ? null
-            : consent
-              ? consentColor(consentRatio)
-              : unsubmittedColor(props.zoning);
+        // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 색을 나눈다
+        const unsubmitted =
+          consentRatio !== null && !consent ? unsubmittedStyle(props.zoning) : null;
 
         const base =
-          consentRatio !== null
+          consent
             ? {
                 // 제출률 색이 구역 색보다 우선한다
-                color: consentFill!,
+                color: consentColor(consentRatio!),
                 // 명부에 제출 기록이 있는 필지는 테두리를 한 겹 굵게 해 눈에 띄게 한다
-                weight: consent ? 2 : 1,
-                opacity: consentStrokeOpacity(consentRatio),
-                fillColor: consentFill!,
-                fillOpacity: consentFillOpacity(consentRatio),
+                weight: 2,
+                opacity: consentStrokeOpacity(consentRatio!),
+                fillColor: consentColor(consentRatio!),
+                fillOpacity: consentFillOpacity(consentRatio!),
               }
+          : unsubmitted
+          ? {
+              color: unsubmitted.color,
+              weight: 1,
+              opacity: unsubmitted.strokeOpacity,
+              fillColor: unsubmitted.color,
+              fillOpacity: unsubmitted.fillOpacity,
+            }
           : showConsent
           ? {
               // 제출률 레이어가 켜져 있으면 명부에 없는 필지는 배경으로 물린다
