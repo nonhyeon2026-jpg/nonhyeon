@@ -370,6 +370,7 @@ export default function AppShell({
               showCadastral={showCadastral}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
+              onNotice={flash}
             />
           ) : (
             <MapView

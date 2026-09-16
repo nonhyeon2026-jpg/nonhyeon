@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   consentColor,
   consentFillOpacity,
@@ -31,6 +32,18 @@ const SELECTED_FILL = "#22c55e";
  * "줌이 낮아서 아무것도 안 보이는" 상태가 되면 클릭할 대상 자체가 사라진다.
  */
 const MAX_UNZONED_ON_SCREEN = 1200;
+
+/** 내 위치 표시 색 */
+const MY_LOCATION_COLOR = "#2563eb";
+
+/** GPS 로 받은 내 위치. accuracy 는 오차 반경(m) */
+type MyLocation = { lat: number; lng: number; accuracy: number };
+
+const GEO_ERRORS: Record<number, string> = {
+  1: "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 접근을 허용하세요.",
+  2: "현재 위치를 확인할 수 없습니다.",
+  3: "위치 확인 시간이 초과되었습니다. 잠시 후 다시 시도하세요.",
+};
 
 let scriptPromise: Promise<void> | null = null;
 
@@ -77,6 +90,7 @@ export default function NaverMapView({
   showCadastral,
   flyTo,
   onParcelClick,
+  onNotice,
 }: {
   clientId: string;
   keyParam: string;
@@ -91,6 +105,8 @@ export default function NaverMapView({
   showCadastral: boolean;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
+  /** 위치 확인 실패 등 사용자에게 알릴 문구 */
+  onNotice: (message: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -101,9 +117,25 @@ export default function NaverMapView({
   /* 콜백은 ref 로 넘겨야 폴리곤 리스너를 다시 붙이지 않아도 최신 값을 본다 */
   const clickRef = useRef(onParcelClick);
   clickRef.current = onParcelClick;
+  const noticeRef = useRef(onNotice);
+  noticeRef.current = onNotice;
 
   const [ready, setReady] = useState(false);
+  /** 지도 init 이벤트가 지났는지 — 네이버 지도는 컨트롤을 이 뒤에 만들어야 붙는다 */
+  const [mapInit, setMapInit] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /** 내 위치 버튼을 넣을 지도 컨트롤 자리 (React 포털 대상) */
+  const [locateSlot, setLocateSlot] = useState<HTMLDivElement | null>(null);
+  const [myLocation, setMyLocation] = useState<MyLocation | null>(null);
+  /** 버튼을 눌러 첫 위치를 기다리는 중 */
+  const [locating, setLocating] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+  /** 새 위치를 받으면 지도를 그리로 옮길지 — 버튼을 누른 직후 한 번만 */
+  const centerOnFixRef = useRef(false);
+  const lastFixRef = useRef<MyLocation | null>(null);
+  const myMarkerRef = useRef<any>(null);
+  const myAccuracyRef = useRef<any>(null);
 
   /**
    * 필지별 경계상자. 화면 판정에 중심점을 쓰면 몸통이 화면을 덮고 있어도
@@ -156,11 +188,13 @@ export default function NaverMapView({
           minZoom: 13,
           maxZoom: 20,
           zoomControl: true,
-          zoomControlOptions: { position: naver.maps.Position.TOP_LEFT },
+          // TOP_LEFT 는 컨트롤을 가로로 늘어놓는다. LEFT_TOP 이어야 내 위치 버튼이 그 아래로 쌓인다
+          zoomControlOptions: { position: naver.maps.Position.LEFT_TOP },
           scaleControl: true,
           logoControlOptions: { position: naver.maps.Position.BOTTOM_LEFT },
         });
         mapRef.current = map;
+        naver.maps.Event.once(map, "init", () => !cancelled && setMapInit(true));
         // idle = 이동/줌이 끝난 시점. 이때만 폴리곤을 다시 계산한다
         naver.maps.Event.addListener(map, "idle", () => setViewTick((t) => t + 1));
         setReady(true);
@@ -402,6 +436,127 @@ export default function NaverMapView({
     map.panTo(new naver.maps.LatLng(flyTo[0], flyTo[1]));
   }, [ready, flyTo]);
 
+  /*
+   * 내 위치 버튼 자리.
+   * CustomControl 은 HTML 문자열로 제 요소를 만들어 쓰므로(넘긴 DOM 요소는 붙이지 않는다)
+   * 빈 칸을 만들게 한 뒤 그 요소에 버튼을 포털로 그린다.
+   * 확대·축소 컨트롤과 같은 LEFT_TOP 에, 그보다 나중에 붙여야 바로 아래에 온다.
+   */
+  useEffect(() => {
+    if (!mapInit) return;
+    const naver = window.naver;
+    const control = new naver.maps.CustomControl("<div></div>", {
+      position: naver.maps.Position.LEFT_TOP,
+    });
+    control.setMap(mapRef.current);
+    setLocateSlot(control.getElement());
+    return () => {
+      control.setMap(null);
+      setLocateSlot(null);
+    };
+  }, [mapInit]);
+
+  const centerOn = useCallback((loc: MyLocation) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.setZoom(Math.max(map.getZoom(), 17), true);
+    map.panTo(new window.naver.maps.LatLng(loc.lat, loc.lng));
+  }, []);
+
+  const stopWatching = useCallback(() => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+  }, []);
+
+  /**
+   * 내 위치 버튼.
+   * 현장을 걸으며 보는 용도라 한 번 받고 끝내지 않고 계속 따라간다.
+   * 이미 따라가는 중에 누르면 지도만 내 위치로 다시 옮긴다.
+   */
+  const locate = useCallback(() => {
+    if (watchIdRef.current !== null && lastFixRef.current) {
+      centerOn(lastFixRef.current);
+      return;
+    }
+    if (watchIdRef.current !== null) return; // 첫 위치를 기다리는 중
+    // 위치 API 는 HTTPS(또는 localhost)에서만 열린다
+    if (!window.isSecureContext || !("geolocation" in navigator)) {
+      noticeRef.current("⚠️ 이 브라우저에서는 위치를 확인할 수 없습니다 (HTTPS 접속 필요).");
+      return;
+    }
+
+    setLocating(true);
+    centerOnFixRef.current = true;
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (p) => {
+        const loc = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy };
+        lastFixRef.current = loc;
+        setMyLocation(loc);
+        setLocating(false);
+        if (centerOnFixRef.current) {
+          centerOnFixRef.current = false;
+          centerOn(loc);
+        }
+      },
+      (err) => {
+        // 이미 위치를 받은 뒤 실내 등에서 잠깐 끊기는 것은 무시하고 마지막 위치를 둔다
+        if (err.code !== err.PERMISSION_DENIED && lastFixRef.current) return;
+        stopWatching();
+        lastFixRef.current = null;
+        setMyLocation(null);
+        setLocating(false);
+        noticeRef.current(`⚠️ ${GEO_ERRORS[err.code] ?? "현재 위치를 확인할 수 없습니다."}`);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 },
+    );
+  }, [centerOn, stopWatching]);
+
+  useEffect(() => stopWatching, [stopWatching]);
+
+  /* 내 위치 점과 오차 범위 원 */
+  useEffect(() => {
+    if (!ready) return;
+    const naver = window.naver;
+    if (!myLocation) {
+      myMarkerRef.current?.setMap(null);
+      myAccuracyRef.current?.setMap(null);
+      myMarkerRef.current = null;
+      myAccuracyRef.current = null;
+      return;
+    }
+    // GPS 좌표는 배경지도와 같은 기준이라 필지처럼 shiftLng 로 옮기지 않는다
+    const at = new naver.maps.LatLng(myLocation.lat, myLocation.lng);
+    if (!myMarkerRef.current) {
+      myAccuracyRef.current = new naver.maps.Circle({
+        map: mapRef.current,
+        center: at,
+        radius: myLocation.accuracy,
+        fillColor: MY_LOCATION_COLOR,
+        fillOpacity: 0.1,
+        strokeColor: MY_LOCATION_COLOR,
+        strokeOpacity: 0.35,
+        strokeWeight: 1,
+        // 필지 클릭을 가로채지 않게 한다
+        clickable: false,
+        zIndex: 200000,
+      });
+      myMarkerRef.current = new naver.maps.Marker({
+        map: mapRef.current,
+        position: at,
+        icon: {
+          content: `<div style="width:18px;height:18px;border-radius:9999px;background:${MY_LOCATION_COLOR};border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.2),0 1px 4px rgba(0,0,0,.45)"></div>`,
+          anchor: new naver.maps.Point(9, 9),
+        },
+        clickable: false,
+        zIndex: 200001,
+      });
+    } else {
+      myMarkerRef.current.setPosition(at);
+      myAccuracyRef.current.setCenter(at);
+      myAccuracyRef.current.setRadius(myLocation.accuracy);
+    }
+  }, [ready, myLocation]);
+
   if (error) {
     return (
       <div className="flex h-full items-center justify-center bg-slate-900 p-8">
@@ -420,6 +575,41 @@ export default function NaverMapView({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+
+      {locateSlot &&
+        createPortal(
+          <button
+            type="button"
+            onClick={locate}
+            title="내 위치"
+            aria-label="내 위치"
+            aria-pressed={myLocation !== null}
+            // 확대·축소 컨트롤(폭 28px + 테두리 1px, 바깥 여백 10px)과 줄을 맞춘다
+            className={`ml-[10px] flex h-[30px] w-[30px] items-center justify-center border border-[#444] bg-white transition active:bg-slate-100 ${
+              myLocation || locating ? "text-blue-600" : "text-slate-600"
+            }`}
+          >
+            {/* 조준선 모양 — 위치를 받는 동안은 깜빡인다 */}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className={`h-[18px] w-[18px] ${locating ? "animate-pulse" : ""}`}
+            >
+              <circle cx="12" cy="12" r="7" />
+              <circle
+                cx="12"
+                cy="12"
+                r="2.5"
+                fill={myLocation ? "currentColor" : "none"}
+              />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+          </button>,
+          locateSlot,
+        )}
 
       {ready && (
         <div className="pointer-events-none absolute bottom-4 right-4 z-[500] rounded-lg bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400 backdrop-blur">
