@@ -388,6 +388,23 @@ export default function AppShell({
             />
           )}
 
+          {/* 좁은 화면용 구역 요약. 왼쪽 위는 확대·축소와 내 위치 버튼이 쓰므로 오른쪽 위에 둔다.
+              오른쪽 패널이 뜨는 넓은 화면에서는 같은 내용이 겹치므로 숨긴다 */}
+          {showConsent && (
+            <div className="pointer-events-none absolute right-3 top-3 z-[1000] max-w-[62vw] md:hidden">
+              <ConsentSummary
+                zones={zones}
+                consent={consent}
+                visibleZoneIds={visibleZoneIds}
+                propsOf={propsOf}
+                adminMode={adminMode}
+                busy={busy}
+                compact
+                onSetOwners={setZoneOwners}
+              />
+            </div>
+          )}
+
           <div className="pointer-events-none absolute bottom-6 left-1/2 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2 text-center">
             <div className="md:hidden">
               <ParcelBrief

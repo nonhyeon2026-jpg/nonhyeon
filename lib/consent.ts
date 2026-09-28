@@ -96,6 +96,12 @@ export type ZoneConsentSummary = ConsentSummary & {
   owners: number | null;
   /** 소유자 수 기준 제출률(%). owners 가 없으면 호수 기준 ratio 와 같다 */
   ownerRatio: number;
+  /** 구역에 편입된 필지의 면적 합계 (㎡) */
+  area: number;
+  /** 한 호라도 제출된 필지의 면적 합계 (㎡) */
+  consentedArea: number;
+  /** 면적 동의율(%). 소수점 한 자리까지 남긴다 */
+  areaRatio: number;
 };
 
 /**
@@ -112,6 +118,8 @@ export function summarizeZone(
   let total = 0;
   let submittedParcels = 0;
   let zoneParcels = 0;
+  let area = 0;
+  let consentedArea = 0;
   const counted = new Set<string>();
 
   for (const pnu of pnus) {
@@ -120,6 +128,16 @@ export function summarizeZone(
     zoneParcels += 1;
 
     const c = consent[pnu];
+
+    /*
+     * 면적은 호수와 달리 필지 단위로 센다.
+     * 다세대에서 한 호만 제출했어도 그 필지 면적은 전부 동의로 본다 — 토지 지분은
+     * 호마다 쪼개져 있지 않고, 필지가 통째로 사업 대상에 들어가기 때문이다.
+     * 딸림 지번도 같은 건물이 앉은 별개의 땅이므로 각각 더한다 (호수처럼 중복이 아니다).
+     */
+    area += props.area;
+    if (c && c.submitted > 0) consentedArea += props.area;
+
     if (c) {
       // 딸림 지번은 대표 지번과 같은 문서라 이미 세어져 있다.
       // parcelUnits 로 갈음하지도 않는다 — 그 건물의 호수는 대표 쪽에 다 들어 있다.
@@ -146,6 +164,10 @@ export function summarizeZone(
     ratio,
     owners: usable,
     ownerRatio: usable ? Math.round((submitted / usable) * 100) : ratio,
+    area,
+    consentedArea,
+    // 면적 요건은 1/2 처럼 경계가 딱 정해져 있어, 49.6% 가 50% 로 보이면 안 된다
+    areaRatio: area ? Math.round((consentedArea / area) * 1000) / 10 : 0,
   };
 }
 
