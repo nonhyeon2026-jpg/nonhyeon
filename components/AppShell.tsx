@@ -62,6 +62,8 @@ export default function AppShell({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** 선택 영역 제출률의 분모로 쓸 소유자 수. 구역과 달리 저장하지 않는 임시값이다 */
   const [selectionOwners, setSelectionOwners] = useState("");
+  /** 지도에서 영역을 찍는 중 — 그동안은 지도를 덮는 카드를 치운다 */
+  const [drawing, setDrawing] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
@@ -398,6 +400,7 @@ export default function AppShell({
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
               onLassoSelect={handleLassoSelect}
+              onLassoModeChange={setDrawing}
               onNotice={flash}
             />
           ) : (
@@ -418,7 +421,11 @@ export default function AppShell({
 
           {/* 좁은 화면용 요약 열. 왼쪽 위는 확대·축소와 마법 선택 버튼이 쓰므로 오른쪽 위에 둔다.
               오른쪽 패널이 뜨는 넓은 화면에서는 같은 내용이 겹치므로 숨긴다 */}
-          <div className="pointer-events-none absolute right-3 top-3 z-[1000] flex max-w-[62vw] flex-col gap-1.5 md:hidden">
+          <div
+            className={`pointer-events-none absolute right-3 top-3 z-[1000] flex max-w-[62vw] flex-col gap-1.5 md:hidden ${
+              drawing ? "hidden" : ""
+            }`}
+          >
             {showConsent && (
               <ConsentSummary
                 zones={zones}
@@ -441,7 +448,12 @@ export default function AppShell({
             />
           </div>
 
-          <div className="pointer-events-none absolute bottom-6 left-1/2 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2 text-center">
+          {/* 영역을 찍는 동안은 비운다 — 아래 가운데는 영역 조작줄 자리다 */}
+          <div
+            className={`pointer-events-none absolute bottom-6 left-1/2 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2 text-center ${
+              drawing ? "hidden" : ""
+            }`}
+          >
             <div className="md:hidden">
               <ParcelBrief
                 selected={selected}

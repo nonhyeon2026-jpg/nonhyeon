@@ -92,6 +92,7 @@ export default function NaverMapView({
   flyTo,
   onParcelClick,
   onLassoSelect,
+  onLassoModeChange,
   onNotice,
 }: {
   clientId: string;
@@ -109,6 +110,8 @@ export default function NaverMapView({
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
   /** 영역을 그려 고른 필지들 (마법 선택) */
   onLassoSelect: (pnus: string[], additive: boolean) => void;
+  /** 영역을 찍는 중인지 — 그동안은 지도를 덮는 다른 카드를 치운다 */
+  onLassoModeChange: (on: boolean) => void;
   /** 위치 확인 실패 등 사용자에게 알릴 문구 */
   onNotice: (message: string) => void;
 }) {
@@ -591,12 +594,17 @@ export default function NaverMapView({
     setLassoCount(0);
   }, []);
 
-  /** 영역을 확정한다. 점이 셋 미만이면 아직 면이 아니다 */
+  /**
+   * 영역을 확정한다. 점이 셋 미만이면 아직 면이 아니다.
+   * 확정하면 모드에서 나온다 — 결과(선택 영역 카드·알림)를 바로 봐야 하는데
+   * 그리는 동안은 그것들을 치워 두기 때문이다. 또 그리려면 버튼을 다시 누른다.
+   */
   const completeLasso = useCallback(
     (additive: boolean) => {
       const pts = lassoPtsRef.current;
       if (pts.length < 3) return;
       clearLasso();
+      setLassoOn(false);
       selectWithin(pts, additive);
     },
     [clearLasso, selectWithin],
@@ -644,6 +652,10 @@ export default function NaverMapView({
   useEffect(() => {
     if (!lassoOn) clearLasso();
   }, [lassoOn, clearLasso]);
+
+  const lassoModeRef = useRef(onLassoModeChange);
+  lassoModeRef.current = onLassoModeChange;
+  useEffect(() => lassoModeRef.current(lassoOn), [lassoOn]);
 
   /**
    * 찍은 점을 지도 위에 그린다.
@@ -896,44 +908,52 @@ export default function NaverMapView({
           lassoSlot,
         )}
 
+      {/*
+        영역 도구 조작줄.
+        지도를 덮는 요약 카드·필지 카드가 z-1000 이라 그보다 위에 둬야 가려지지 않는다.
+        자리는 아래 가운데 — 관리자 안내줄과 같은 자리라 이 앱에서 "지금 할 일" 이 뜨는
+        곳이고, 손으로 쓸 때 엄지가 닿는다. 버튼은 상태에 따라 사라지게 두지 않고
+        흐리게만 한다 — 있다 없다 하면 어디 있는지 찾게 된다.
+      */}
       {lassoOn && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-[600] flex max-w-[92%] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-500/95 px-3 py-1.5 text-xs font-medium text-slate-950 shadow-lg">
-          {lassoCount === 0 ? (
-            <span>지도를 눌러 점을 찍으세요</span>
-          ) : (
-            <span>
-              점 {lassoCount}개
-              {lassoCount < 3 ? " · 3개부터 면이 됩니다" : " · 첫 점을 다시 누르면 닫힙니다"}
-            </span>
-          )}
-          {lassoCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                lassoPtsRef.current = lassoPtsRef.current.slice(0, -1);
-                setLassoCount(lassoPtsRef.current.length);
-              }}
-              className="pointer-events-auto rounded-full bg-slate-950/20 px-2 py-0.5 transition hover:bg-slate-950/35"
-            >
-              되돌리기
-            </button>
-          )}
-          {lassoCount >= 3 && (
-            <button
-              type="button"
-              onClick={(e) => completeLasso(e.shiftKey || e.ctrlKey || e.metaKey)}
-              className="pointer-events-auto rounded-full bg-slate-950 px-2.5 py-0.5 font-semibold text-emerald-300 transition hover:bg-slate-800"
-            >
-              완료
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setLassoOn(false)}
-            className="pointer-events-auto rounded-full bg-slate-950/20 px-2 py-0.5 transition hover:bg-slate-950/35"
-          >
-            끄기
-          </button>
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-[1200] w-[min(92vw,400px)] -translate-x-1/2">
+          <div className="pointer-events-auto rounded-2xl border border-emerald-400/60 bg-slate-900/95 px-3 py-2.5 shadow-2xl ring-1 ring-black/40 backdrop-blur">
+            <div className="text-center text-[11px] leading-snug text-slate-300">
+              {lassoCount === 0
+                ? "지도를 눌러 점을 찍으세요"
+                : lassoCount < 3
+                  ? `점 ${lassoCount}개 · 3개부터 면이 됩니다`
+                  : `점 ${lassoCount}개 · 첫 점을 다시 눌러도 닫힙니다`}
+            </div>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={lassoCount === 0}
+                onClick={() => {
+                  lassoPtsRef.current = lassoPtsRef.current.slice(0, -1);
+                  setLassoCount(lassoPtsRef.current.length);
+                }}
+                className="shrink-0 rounded-xl border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800 disabled:opacity-35"
+              >
+                되돌리기
+              </button>
+              <button
+                type="button"
+                disabled={lassoCount < 3}
+                onClick={(e) => completeLasso(e.shiftKey || e.ctrlKey || e.metaKey)}
+                className="min-w-0 flex-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-35"
+              >
+                완료
+              </button>
+              <button
+                type="button"
+                onClick={() => setLassoOn(false)}
+                className="shrink-0 rounded-xl border border-slate-600 px-2.5 py-1.5 text-xs text-slate-200 transition hover:bg-slate-800"
+              >
+                끄기
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
