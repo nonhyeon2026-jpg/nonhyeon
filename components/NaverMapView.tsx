@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   consentColor,
@@ -9,7 +9,7 @@ import {
   unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
-import { pointInRing, shiftLng } from "@/lib/geo";
+import { ringsIntersect, shiftLng } from "@/lib/geo";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
 
 /* 네이버 지도 JS API v3 는 타입 패키지가 없으므로 최소한으로만 선언한다 */
@@ -144,16 +144,18 @@ export default function NaverMapView({
   /** 마법 선택(영역 그리기) 버튼 자리 — 내 위치 버튼 바로 아래 */
   const [lassoSlot, setLassoSlot] = useState<HTMLDivElement | null>(null);
   const [lassoOn, setLassoOn] = useState(false);
+  const lassoOnRef = useRef(false);
+  lassoOnRef.current = lassoOn;
   /**
-   * 그리는 중인 경로(지도 컨테이너 기준 화면 좌표).
-   * 상태가 아니라 ref 에 쌓는다 — pointermove 는 일괄 처리되는 이벤트라
-   * 상태로 두면 손을 뗀 순간 마지막 몇 점이 아직 반영돼 있지 않을 수 있다.
+   * 찍은 점들 [lat, lng]. 지도 좌표로 들고 있어 지도를 움직여도 제자리에 남는다.
+   * 상태가 아니라 ref 에 쌓고 개수만 상태로 둔다 — 지도 클릭 리스너를 점을 찍을
+   * 때마다 다시 붙이지 않으려면 핸들러가 최신 배열을 ref 로 봐야 한다.
    */
-  const lassoPathRef = useRef<[number, number][]>([]);
-  const [, redrawLasso] = useReducer((n: number) => n + 1, 0);
-  const drawingRef = useRef(false);
-  /** 그리기 시작할 때 눌린 보조키 — 손을 뗄 때 기존 선택에 더할지 판단한다 */
-  const lassoAdditiveRef = useRef(false);
+  const lassoPtsRef = useRef<[number, number][]>([]);
+  const [lassoCount, setLassoCount] = useState(0);
+  /** 그리는 중인 도형과 꼭짓점 표시 */
+  const lassoPolyRef = useRef<any>(null);
+  const lassoDotsRef = useRef<any[]>([]);
   const lassoSelectRef = useRef(onLassoSelect);
   lassoSelectRef.current = onLassoSelect;
   /* 판정에 필요한 값들 — 핸들러를 다시 만들지 않게 ref 로 본다 */
@@ -285,7 +287,14 @@ export default function NaverMapView({
     const props = f.properties;
     naver.maps.Event.addListener(poly, "click", (e: any) => {
       const ev = e.domEvent as MouseEvent;
-      clickRef.current(props, ev.shiftKey || ev.ctrlKey || ev.metaKey);
+      const additive = ev.shiftKey || ev.ctrlKey || ev.metaKey;
+      // 그리는 중에는 필지를 눌러도 선택이 아니라 점이 찍힌다.
+      // 필지가 지도를 덮고 있어 이 경로가 없으면 대부분의 자리에 점을 못 찍는다
+      if (lassoOnRef.current) {
+        addPointRef.current(e.coord, additive);
+        return;
+      }
+      clickRef.current(props, additive);
     });
     polysRef.current.set(props.pnu, poly);
     return poly;
@@ -509,22 +518,23 @@ export default function NaverMapView({
   }, [mapInit]);
 
   /**
-   * 그린 영역 안에 든 구역 필지를 고른다.
+   * 찍어 만든 영역에 걸친 구역 필지를 고른다.
    *
    * 판정은 화면 좌표에서 한다. 폴리곤을 그릴 때 쓰는 변환(fromCoordToOffset)을
    * 그대로 써야 "그린 자리" 와 "칠해지는 자리" 가 어긋나지 않는다.
+   * 찍은 점은 배경지도를 직접 누른 좌표라 그대로 두고, 필지만 그릴 때처럼
+   * shiftLng 로 밀어서 본다.
    *
-   * 중심점만 보면 도로처럼 길쭉한 필지가 중심만 걸쳐도 리본 전체가 선 밖으로
-   * 삐져나오고, 거의 다 들어온 필지는 중심이 밖이라 빠진다. 그래서 바깥 링의
-   * 꼭짓점이 전부 안에 들어온 필지만 고른다 — 그린 선을 넘는 색이 없다.
+   * 온전히 들어온 필지만 고르지 않는다 — 선에 걸치기만 해도 고른다.
+   * 구역계를 잡을 때 경계에 걸친 필지를 빠뜨리지 않는 쪽이 낫다.
    *
-   * 구역에 편입된 필지만 대상으로 한다. 보이지 않는 구역의 필지는 지도에
-   * 그려지지도 않으므로 제외한다 — 눈에 보이는 것만 고른다.
+   * 대상은 구역에 편입된 필지다. 보이지 않는 구역의 필지는 지도에 그려지지도
+   * 않으므로 제외한다 — 눈에 보이는 것만 고른다.
    */
-  const finishLasso = useCallback((path: [number, number][], additive: boolean) => {
+  const selectWithin = useCallback((pts: [number, number][], additive: boolean) => {
     const map = mapRef.current;
-    // 점 세 개는 있어야 면이 된다 (톡 누른 경우는 그냥 흘린다)
-    if (!map || path.length < 3) return;
+    // 점 세 개는 있어야 면이 된다
+    if (!map || pts.length < 3) return;
     const naver = window.naver;
     const proj = map.getProjection();
     if (typeof proj?.fromCoordToOffset !== "function") {
@@ -532,87 +542,174 @@ export default function NaverMapView({
       return;
     }
 
+    const toScreen = (lat: number, lng: number): [number, number] => {
+      const o = proj.fromCoordToOffset(new naver.maps.LatLng(lat, lng));
+      return [o.x, o.y];
+    };
+
+    const area = pts.map(([lat, lng]) => toScreen(lat, lng));
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    for (const [x, y] of path) {
+    for (const [x, y] of area) {
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
 
-    /** 지적도 좌표를 화면 좌표로. 그릴 때와 같이 shiftLng 로 민 자리를 본다 */
-    const toScreen = (lat: number, lng: number): [number, number] => {
-      const o = proj.fromCoordToOffset(new naver.maps.LatLng(lat, shiftLng(lng)));
-      return [o.x, o.y];
-    };
-
-    const inLasso = ([x, y]: [number, number]) =>
-      x >= minX && x <= maxX && y >= minY && y <= maxY && pointInRing(path, x, y);
-
-    /*
-     * 구역 필지는 6백 개 남짓이고 꼭짓점을 다 합쳐도 3천여 개라 전부 대조해도 된다.
-     * 중심점으로 미리 거르지 않는다 — 손으로 그은 선은 오목한 데가 생기고,
-     * 그러면 꼭짓점이 다 안에 들어온 필지인데도 중심이 옴폭한 곳에 빠질 수 있다.
-     * 멀리 있는 필지는 어차피 첫 꼭짓점의 경계상자 판정에서 바로 걸러진다.
-     */
     const hits: string[] = [];
     for (const f of parcelsRef.current.features) {
       const { pnu } = f.properties;
       const zone = zoneOfRef.current.get(pnu);
       if (!zone || !visibleZonesRef.current.has(zone.id)) continue;
 
-      let whole = true;
-      for (const [lng, lat] of f.geometry.coordinates[0]) {
-        if (!inLasso(toScreen(lat, lng))) {
-          whole = false;
-          break;
-        }
-      }
-      if (whole) hits.push(pnu);
+      // 경계상자가 안 겹치면 변끼리 대조할 것도 없다
+      let pMinX = Infinity;
+      let pMaxX = -Infinity;
+      let pMinY = Infinity;
+      let pMaxY = -Infinity;
+      const ring = f.geometry.coordinates[0].map(([lng, lat]) => {
+        const p = toScreen(lat, shiftLng(lng));
+        if (p[0] < pMinX) pMinX = p[0];
+        if (p[0] > pMaxX) pMaxX = p[0];
+        if (p[1] < pMinY) pMinY = p[1];
+        if (p[1] > pMaxY) pMaxY = p[1];
+        return p;
+      });
+      if (pMaxX < minX || pMinX > maxX || pMaxY < minY || pMinY > maxY) continue;
+
+      if (ringsIntersect(ring, area)) hits.push(pnu);
     }
     lassoSelectRef.current(hits, additive);
   }, []);
 
+  /** 찍은 점을 모두 지운다 */
+  const clearLasso = useCallback(() => {
+    lassoPtsRef.current = [];
+    setLassoCount(0);
+  }, []);
+
+  /** 영역을 확정한다. 점이 셋 미만이면 아직 면이 아니다 */
+  const completeLasso = useCallback(
+    (additive: boolean) => {
+      const pts = lassoPtsRef.current;
+      if (pts.length < 3) return;
+      clearLasso();
+      selectWithin(pts, additive);
+    },
+    [clearLasso, selectWithin],
+  );
+
   /**
-   * 포인터 위치를 지도 컨테이너 기준 좌표로 바꾼다.
-   * 그리기 판은 왼쪽 컨트롤 줄만큼 비켜나 있으므로 판이 아니라 지도를 기준으로 잡아야
-   * 그려지는 자국과 좌표 변환이 같은 원점을 쓴다.
+   * 지도를 누르면 점을 찍는다.
+   * 첫 점을 다시 누르면 영역을 닫는다 — 손으로도 쓸 수 있게 16px 까지 봐 준다.
    */
-  const atPointer = (e: React.PointerEvent<HTMLDivElement>): [number, number] => {
-    const r = containerRef.current!.getBoundingClientRect();
-    return [e.clientX - r.left, e.clientY - r.top];
-  };
+  const addLassoPoint = useCallback(
+    (coord: any, additive: boolean) => {
+      const pts = lassoPtsRef.current;
+      const map = mapRef.current;
+      const proj = map?.getProjection();
+      if (pts.length >= 3 && typeof proj?.fromCoordToOffset === "function") {
+        const naver = window.naver;
+        const first = proj.fromCoordToOffset(new naver.maps.LatLng(pts[0][0], pts[0][1]));
+        const here = proj.fromCoordToOffset(coord);
+        if (Math.hypot(first.x - here.x, first.y - here.y) <= 16) {
+          completeLasso(additive);
+          return;
+        }
+      }
+      lassoPtsRef.current = [...pts, [coord.lat(), coord.lng()]];
+      setLassoCount(lassoPtsRef.current.length);
+    },
+    [completeLasso],
+  );
+  const addPointRef = useRef(addLassoPoint);
+  addPointRef.current = addLassoPoint;
 
-  const onLassoDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drawingRef.current = true;
-    lassoAdditiveRef.current = e.shiftKey || e.ctrlKey || e.metaKey;
-    lassoPathRef.current = [atPointer(e)];
-    redrawLasso();
-  }, []);
+  /* 배경(필지가 없는 자리)을 눌렀을 때도 점이 찍히게 한다 */
+  useEffect(() => {
+    if (!ready) return;
+    const naver = window.naver;
+    const listener = naver.maps.Event.addListener(mapRef.current, "click", (e: any) => {
+      if (!lassoOnRef.current) return;
+      const ev = e.domEvent as MouseEvent | undefined;
+      addPointRef.current(e.coord, Boolean(ev?.shiftKey || ev?.ctrlKey || ev?.metaKey));
+    });
+    return () => naver.maps.Event.removeListener(listener);
+  }, [ready]);
 
-  const onLassoMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (!drawingRef.current) return;
-    const p = atPointer(e);
-    const path = lassoPathRef.current;
-    const last = path[path.length - 1];
-    // 4px 보다 촘촘한 점은 버린다 — 손으로 그으면 점이 수백 개가 되고 판정만 느려진다
-    if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 4) return;
-    lassoPathRef.current = [...path, p];
-    redrawLasso();
-  }, []);
+  /* 모드를 끄면 찍던 점도 버린다 */
+  useEffect(() => {
+    if (!lassoOn) clearLasso();
+  }, [lassoOn, clearLasso]);
 
-  const onLassoUp = useCallback(() => {
-    if (!drawingRef.current) return;
-    drawingRef.current = false;
-    const path = lassoPathRef.current;
-    lassoPathRef.current = [];
-    redrawLasso();
-    finishLasso(path, lassoAdditiveRef.current);
-  }, [finishLasso]);
+  /**
+   * 찍은 점을 지도 위에 그린다.
+   * 도형을 지도 오버레이로 두면 지도를 움직이거나 확대해도 제자리에 붙어 있다.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const naver = window.naver;
+    const map = mapRef.current;
+    const pts = lassoPtsRef.current;
+
+    for (const d of lassoDotsRef.current) d.setMap(null);
+    lassoDotsRef.current = [];
+
+    if (!pts.length) {
+      lassoPolyRef.current?.setMap(null);
+      lassoPolyRef.current = null;
+      return;
+    }
+
+    const paths = pts.map(([lat, lng]) => new naver.maps.LatLng(lat, lng));
+    if (!lassoPolyRef.current) {
+      lassoPolyRef.current = new naver.maps.Polygon({
+        map,
+        paths: [paths],
+        fillColor: SELECTED_FILL,
+        fillOpacity: 0.18,
+        strokeColor: SELECTED_FILL,
+        strokeWeight: 2.5,
+        strokeStyle: "shortdash",
+        // 점을 찍는 동안 이 도형이 클릭을 가로채면 다음 점을 찍을 수 없다
+        clickable: false,
+        zIndex: 300000,
+      });
+    } else {
+      lassoPolyRef.current.setPaths([paths]);
+      lassoPolyRef.current.setMap(map);
+    }
+
+    lassoDotsRef.current = pts.map(([lat, lng], i) => {
+      // 첫 점은 크게 — 여기를 다시 누르면 닫힌다는 표시다
+      const size = i === 0 ? 16 : 10;
+      return new naver.maps.Marker({
+        map,
+        position: new naver.maps.LatLng(lat, lng),
+        icon: {
+          content: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${
+            i === 0 ? "#fff" : SELECTED_FILL
+          };border:3px solid ${SELECTED_FILL};box-sizing:border-box;box-shadow:0 1px 3px rgba(0,0,0,.45)"></div>`,
+          anchor: new naver.maps.Point(size / 2, size / 2),
+        },
+        clickable: false,
+        zIndex: 300001,
+      });
+    });
+  }, [ready, lassoCount]);
+
+  /* 컴포넌트가 사라질 때 그리던 도형도 걷는다 */
+  useEffect(
+    () => () => {
+      lassoPolyRef.current?.setMap(null);
+      for (const d of lassoDotsRef.current) d.setMap(null);
+      lassoDotsRef.current = [];
+    },
+    [],
+  );
 
   const centerOn = useCallback((loc: MyLocation) => {
     const map = mapRef.current;
@@ -800,39 +897,36 @@ export default function NaverMapView({
         )}
 
       {lassoOn && (
-        <>
-          {/*
-           * 영역을 그리는 판. 지도를 덮어 끌기가 지도 이동으로 새지 않게 한다.
-           * 왼쪽 컨트롤 줄(확대·축소 / 내 위치 / 마법 선택)만큼은 비워 둔다 —
-           * 다 덮으면 켠 뒤에 마법 선택 버튼을 다시 눌러 끌 수가 없다.
-           */}
-          <div
-            className="absolute inset-y-0 left-[52px] right-0 z-[400] cursor-crosshair touch-none"
-            onPointerDown={onLassoDown}
-            onPointerMove={onLassoMove}
-            onPointerUp={onLassoUp}
-            onPointerCancel={onLassoUp}
-          />
-          {/* 자국은 지도 전체 좌표계로 그린다 (판과 원점이 다르다) */}
-          <svg className="pointer-events-none absolute inset-0 z-[450] h-full w-full">
-            {lassoPathRef.current.length > 1 && (
-              <polygon
-                points={lassoPathRef.current.map(([x, y]) => `${x},${y}`).join(" ")}
-                fill={SELECTED_FILL}
-                fillOpacity={0.18}
-                stroke={SELECTED_FILL}
-                strokeWidth={2}
-                strokeDasharray="6 4"
-                strokeLinejoin="round"
-              />
-            )}
-          </svg>
-        </>
-      )}
-
-      {lassoOn && (
-        <div className="pointer-events-none absolute left-1/2 top-3 z-[600] flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-500/95 px-3 py-1.5 text-xs font-medium text-slate-950 shadow-lg">
-          선 안에 온전히 들어온 구역 필지가 선택됩니다 · Shift 로 이어 선택
+        <div className="pointer-events-none absolute left-1/2 top-3 z-[600] flex max-w-[92%] -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full bg-emerald-500/95 px-3 py-1.5 text-xs font-medium text-slate-950 shadow-lg">
+          {lassoCount === 0 ? (
+            <span>지도를 눌러 점을 찍으세요</span>
+          ) : (
+            <span>
+              점 {lassoCount}개
+              {lassoCount < 3 ? " · 3개부터 면이 됩니다" : " · 첫 점을 다시 누르면 닫힙니다"}
+            </span>
+          )}
+          {lassoCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                lassoPtsRef.current = lassoPtsRef.current.slice(0, -1);
+                setLassoCount(lassoPtsRef.current.length);
+              }}
+              className="pointer-events-auto rounded-full bg-slate-950/20 px-2 py-0.5 transition hover:bg-slate-950/35"
+            >
+              되돌리기
+            </button>
+          )}
+          {lassoCount >= 3 && (
+            <button
+              type="button"
+              onClick={(e) => completeLasso(e.shiftKey || e.ctrlKey || e.metaKey)}
+              className="pointer-events-auto rounded-full bg-slate-950 px-2.5 py-0.5 font-semibold text-emerald-300 transition hover:bg-slate-800"
+            >
+              완료
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setLassoOn(false)}

@@ -34,3 +34,42 @@ export function pointInRing(ring: [number, number][], x: number, y: number): boo
   }
   return inside;
 }
+
+/** 세 점의 방향 (양수면 반시계). 선분 교차 판정에 쓴다 */
+const turn = (
+  o: [number, number],
+  a: [number, number],
+  b: [number, number],
+): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+/** 두 선분이 서로를 가로지르는지 (끝점만 맞닿는 경우는 제외) */
+function segmentsCross(
+  p1: [number, number],
+  p2: [number, number],
+  p3: [number, number],
+  p4: [number, number],
+): boolean {
+  const d1 = turn(p3, p4, p1);
+  const d2 = turn(p3, p4, p2);
+  const d3 = turn(p1, p2, p3);
+  const d4 = turn(p1, p2, p4);
+  return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+}
+
+/**
+ * 두 링이 조금이라도 겹치는지.
+ *
+ * 세 가지를 본다 — 한쪽 꼭짓점이 다른 쪽 안에 있거나(어느 쪽이 더 크든 잡힌다),
+ * 변끼리 가로지르거나. 변 교차까지 봐야 도로처럼 가늘고 긴 필지가 꼭짓점 없이
+ * 영역을 관통하는 경우를 놓치지 않는다.
+ */
+export function ringsIntersect(a: [number, number][], b: [number, number][]): boolean {
+  for (const [x, y] of a) if (pointInRing(b, x, y)) return true;
+  for (const [x, y] of b) if (pointInRing(a, x, y)) return true;
+  for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+    for (let k = 0, l = b.length - 1; k < b.length; l = k++) {
+      if (segmentsCross(a[j], a[i], b[l], b[k])) return true;
+    }
+  }
+  return false;
+}
