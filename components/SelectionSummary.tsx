@@ -14,6 +14,9 @@ import type { ParcelProps } from "@/lib/types";
  *
  * 소유자 수는 구역처럼 저장된 값이 없다. 기본은 건축물대장 호수 합계로 두고,
  * 현장에서 아는 숫자를 넣어 바꿔볼 수 있게 한다 (저장하지 않는다).
+ *
+ * 넓은 화면에서는 이 카드가 뜨는 동안 구역 전체 카드를 치운다 (AppShell) —
+ * 280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
  */
 export default function SelectionSummary({
   selected,
@@ -135,6 +138,8 @@ export default function SelectionSummary({
         />
         <p className="mt-1 text-[10px] leading-snug text-slate-600">
           선택이 바뀌면 지워집니다. 저장되지 않습니다.
+          <br />
+          선택을 해제하면 구역 전체 현황이 다시 보입니다.
         </p>
       </div>
     </div>

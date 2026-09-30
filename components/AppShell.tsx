@@ -500,7 +500,12 @@ export default function AppShell({
               </div>
             )}
 
-            {showConsent && (
+            {/*
+              필지를 고르면 구역 전체 카드를 선택 영역 카드로 바꾼다.
+              280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
+              고른 게 있는 동안 궁금한 건 그 범위의 숫자지 구역 전체가 아니다.
+            */}
+            {showConsent && selected.size === 0 && (
               <ConsentSummary
                 zones={zones}
                 consent={consent}
