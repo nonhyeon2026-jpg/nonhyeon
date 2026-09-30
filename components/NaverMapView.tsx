@@ -156,9 +156,13 @@ export default function NaverMapView({
   const lassoAdditiveRef = useRef(false);
   const lassoSelectRef = useRef(onLassoSelect);
   lassoSelectRef.current = onLassoSelect;
-  /** 판정에 필지 목록이 필요하다 — 핸들러를 다시 만들지 않게 ref 로 본다 */
+  /* 판정에 필요한 값들 — 핸들러를 다시 만들지 않게 ref 로 본다 */
   const parcelsRef = useRef(parcels);
   parcelsRef.current = parcels;
+  const zoneOfRef = useRef(zoneOf);
+  zoneOfRef.current = zoneOf;
+  const visibleZonesRef = useRef(visibleZoneIds);
+  visibleZonesRef.current = visibleZoneIds;
 
   /**
    * 필지별 경계상자. 화면 판정에 중심점을 쓰면 몸통이 화면을 덮고 있어도
@@ -505,14 +509,17 @@ export default function NaverMapView({
   }, [mapInit]);
 
   /**
-   * 그린 영역 안에 든 필지를 고른다.
+   * 그린 영역 안에 든 구역 필지를 고른다.
    *
-   * 화면 좌표를 지도 좌표로 한 번 바꾼 뒤 필지 중심점으로 판정한다. 필지 폴리곤을
-   * 통째로 대조하면 5천 개를 매번 훑어야 하고, 가장자리에 살짝 걸친 필지까지
-   * 딸려 들어와 "그린 대로" 라는 느낌이 깨진다. 중심점이 안에 들어온 필지만 고른다.
+   * 판정은 화면 좌표에서 한다. 폴리곤을 그릴 때 쓰는 변환(fromCoordToOffset)을
+   * 그대로 써야 "그린 자리" 와 "칠해지는 자리" 가 어긋나지 않는다.
    *
-   * 폴리곤을 그릴 때 shiftLng 로 동쪽으로 밀어 두었으므로 중심점도 같이 밀어서 본다 —
-   * 화면에 보이는 위치가 곧 판정 기준이어야 한다.
+   * 중심점만 보면 도로처럼 길쭉한 필지가 중심만 걸쳐도 리본 전체가 선 밖으로
+   * 삐져나오고, 거의 다 들어온 필지는 중심이 밖이라 빠진다. 그래서 바깥 링의
+   * 꼭짓점이 전부 안에 들어온 필지만 고른다 — 그린 선을 넘는 색이 없다.
+   *
+   * 구역에 편입된 필지만 대상으로 한다. 보이지 않는 구역의 필지는 지도에
+   * 그려지지도 않으므로 제외한다 — 눈에 보이는 것만 고른다.
    */
   const finishLasso = useCallback((path: [number, number][], additive: boolean) => {
     const map = mapRef.current;
@@ -520,33 +527,51 @@ export default function NaverMapView({
     if (!map || path.length < 3) return;
     const naver = window.naver;
     const proj = map.getProjection();
-    if (typeof proj?.fromOffsetToCoord !== "function") {
+    if (typeof proj?.fromCoordToOffset !== "function") {
       noticeRef.current("⚠️ 이 지도 버전에서는 영역 선택을 쓸 수 없습니다.");
       return;
     }
 
-    let minLat = Infinity;
-    let maxLat = -Infinity;
-    let minLng = Infinity;
-    let maxLng = -Infinity;
-    const ring: [number, number][] = path.map(([x, y]) => {
-      const c = proj.fromOffsetToCoord(new naver.maps.Point(x, y));
-      const lng = c.lng();
-      const lat = c.lat();
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-      return [lng, lat];
-    });
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of path) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
 
+    /** 지적도 좌표를 화면 좌표로. 그릴 때와 같이 shiftLng 로 민 자리를 본다 */
+    const toScreen = (lat: number, lng: number): [number, number] => {
+      const o = proj.fromCoordToOffset(new naver.maps.LatLng(lat, shiftLng(lng)));
+      return [o.x, o.y];
+    };
+
+    const inLasso = ([x, y]: [number, number]) =>
+      x >= minX && x <= maxX && y >= minY && y <= maxY && pointInRing(path, x, y);
+
+    /*
+     * 구역 필지는 6백 개 남짓이고 꼭짓점을 다 합쳐도 3천여 개라 전부 대조해도 된다.
+     * 중심점으로 미리 거르지 않는다 — 손으로 그은 선은 오목한 데가 생기고,
+     * 그러면 꼭짓점이 다 안에 들어온 필지인데도 중심이 옴폭한 곳에 빠질 수 있다.
+     * 멀리 있는 필지는 어차피 첫 꼭짓점의 경계상자 판정에서 바로 걸러진다.
+     */
     const hits: string[] = [];
     for (const f of parcelsRef.current.features) {
-      const [lat, lng] = f.properties.centroid;
-      const x = shiftLng(lng);
-      // 경계상자로 먼저 걸러 ray casting 을 최소한만 돌린다
-      if (lat < minLat || lat > maxLat || x < minLng || x > maxLng) continue;
-      if (pointInRing(ring, x, lat)) hits.push(f.properties.pnu);
+      const { pnu } = f.properties;
+      const zone = zoneOfRef.current.get(pnu);
+      if (!zone || !visibleZonesRef.current.has(zone.id)) continue;
+
+      let whole = true;
+      for (const [lng, lat] of f.geometry.coordinates[0]) {
+        if (!inLasso(toScreen(lat, lng))) {
+          whole = false;
+          break;
+        }
+      }
+      if (whole) hits.push(pnu);
     }
     lassoSelectRef.current(hits, additive);
   }, []);
@@ -807,7 +832,7 @@ export default function NaverMapView({
 
       {lassoOn && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-[600] flex -translate-x-1/2 items-center gap-2 rounded-full bg-emerald-500/95 px-3 py-1.5 text-xs font-medium text-slate-950 shadow-lg">
-          영역을 그리면 그 안의 필지가 선택됩니다 · Shift 로 이어 선택
+          선 안에 온전히 들어온 구역 필지가 선택됩니다 · Shift 로 이어 선택
           <button
             type="button"
             onClick={() => setLassoOn(false)}

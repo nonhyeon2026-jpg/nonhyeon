@@ -144,7 +144,7 @@ export default function AppShell({
   }, []);
 
   /**
-   * 마법 선택 — 그린 영역 안의 필지를 한꺼번에 고른다.
+   * 마법 선택 — 그린 선 안에 온전히 들어온 구역 필지를 한꺼번에 고른다.
    * 보조키를 누르고 그리면 기존 선택에 더하고, 아니면 새로 고른다 (클릭과 같은 규칙).
    */
   const handleLassoSelect = useCallback(
@@ -158,7 +158,7 @@ export default function AppShell({
       flash(
         pnus.length
           ? `${pnus.length.toLocaleString()}필지를 선택했습니다.`
-          : "그린 영역 안에 필지가 없습니다.",
+          : "선 안에 온전히 들어온 구역 필지가 없습니다. 조금 넓게 그려보세요.",
       );
     },
     [flash],
