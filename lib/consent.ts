@@ -53,29 +53,12 @@ export function removeConsent(map: ConsentMap, pnu: string): ConsentMap {
 export type ConsentSummary = {
   /** 명부에 한 호라도 올라온 필지 수 */
   parcels: number;
+  /** 제출한 호수 */
   submitted: number;
   total: number;
   /** 제출률(%) */
   ratio: number;
 };
-
-/** 필지 묶음의 제출 현황 합계. 명부에 없는 필지는 총 호수도 모르므로 제외한다. */
-export function summarize(pnus: Iterable<string>, consent: ConsentMap): ConsentSummary {
-  let parcels = 0;
-  let submitted = 0;
-  let total = 0;
-  // 여러 지번에 걸친 건물은 어느 지번을 골라도 같은 문서를 가리킨다 — 한 번만 센다
-  const counted = new Set<string>();
-  for (const pnu of pnus) {
-    const c = consent[pnu];
-    if (!c || counted.has(c.pnu)) continue;
-    counted.add(c.pnu);
-    parcels += 1;
-    submitted += c.submitted;
-    total += c.total;
-  }
-  return { parcels, submitted, total, ratio: total ? Math.round((submitted / total) * 100) : 0 };
-}
 
 /**
  * 필지의 총 호수. 건축물대장 표제부의 호수·세대수·가구수 중 가장 큰 값을 쓰고,

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import ConsentEditor from "./ConsentEditor";
-import { consentColor, isSharedInto, summarize } from "@/lib/consent";
+import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ConsentInput, ParcelCollection, ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
@@ -317,7 +317,11 @@ export default function ParcelPanel({
     [selected, propsOf],
   );
 
-  const selectedConsent = useMemo(() => summarize(selected, consent), [selected, consent]);
+  // 선택 영역 카드와 같은 분모를 쓴다 — 한 화면에 두 가지 제출률이 뜨면 안 된다
+  const selectedConsent = useMemo(
+    () => summarizeZone([...selected], propsOf, consent),
+    [selected, propsOf, consent],
+  );
 
   const selectedArea = selectedList.reduce((s, p) => s + p.area, 0);
   /** 개별공시지가 × 면적 합계 (공시지가가 있는 필지만) */

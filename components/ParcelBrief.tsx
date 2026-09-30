@@ -1,6 +1,6 @@
 "use client";
 
-import { consentColor, isSharedInto, summarize } from "@/lib/consent";
+import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
@@ -35,7 +35,8 @@ export default function ParcelBrief({
   const list = [...selected].map((p) => propsOf.get(p)).filter(Boolean) as ParcelProps[];
   if (!list.length) return null;
 
-  const s = summarize(selected, consent);
+  // 선택 영역 카드와 같은 분모를 쓴다 — 한 화면에 두 가지 제출률이 뜨면 안 된다
+  const s = summarizeZone([...selected], propsOf, consent);
   const only = list.length === 1 ? list[0] : null;
   const c = only ? consent[only.pnu] : undefined;
   const ratio = c ? Math.round((c.submitted / c.total) * 100) : null;
