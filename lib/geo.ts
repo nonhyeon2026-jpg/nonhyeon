@@ -17,3 +17,19 @@ export const PARCEL_SHIFT_LNG = PARCEL_SHIFT_M / M_PER_DEG_LNG;
 
 /** 지적도 좌표 [lng, lat] 를 배경지도에 맞춰 옮긴다 */
 export const shiftLng = (lng: number) => lng + PARCEL_SHIFT_LNG;
+
+/**
+ * 점이 폴리곤 링 안에 있는지 (ray casting).
+ * 링과 점 모두 [lng, lat] 순서로 받는다. 위경도를 평면처럼 다루지만
+ * 한 동(洞) 범위에서는 왜곡이 무시할 만하다.
+ */
+export function pointInRing(ring: [number, number][], lng: number, lat: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    // 점의 위도가 변(邊)이 걸친 구간 안에 있을 때만 교차를 따진다
+    if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}

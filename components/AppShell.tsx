@@ -8,6 +8,7 @@ import ConsentSummary from "./ConsentSummary";
 import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
+import SelectionSummary from "./SelectionSummary";
 import { applyConsent, removeConsent as dropConsent } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type {
@@ -59,6 +60,8 @@ export default function AppShell({
     () => new Set(initialZones.map((z) => z.id)),
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** 선택 영역 제출률의 분모로 쓸 소유자 수. 구역과 달리 저장하지 않는 임시값이다 */
+  const [selectionOwners, setSelectionOwners] = useState("");
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
@@ -109,6 +112,9 @@ export default function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* 선택이 바뀌면 직접 넣은 소유자 수는 그 선택의 값이 아니므로 지운다 */
+  useEffect(() => setSelectionOwners(""), [selected]);
+
   /** pnu → 소속 구역 */
   const zoneOf = useMemo(() => {
     const m = new Map<string, Zone>();
@@ -136,6 +142,27 @@ export default function AppShell({
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
   }, []);
+
+  /**
+   * 마법 선택 — 그린 영역 안의 필지를 한꺼번에 고른다.
+   * 보조키를 누르고 그리면 기존 선택에 더하고, 아니면 새로 고른다 (클릭과 같은 규칙).
+   */
+  const handleLassoSelect = useCallback(
+    (pnus: string[], additive: boolean) => {
+      setSelected((prev) => {
+        const next = additive ? new Set(prev) : new Set<string>();
+        for (const p of pnus) next.add(p);
+        return next;
+      });
+      setFlyTo(null);
+      flash(
+        pnus.length
+          ? `${pnus.length.toLocaleString()}필지를 선택했습니다.`
+          : "그린 영역 안에 필지가 없습니다.",
+      );
+    },
+    [flash],
+  );
 
   /** 구역 목록을 갱신하는 모든 요청의 공통 처리 */
   const send = useCallback(
@@ -370,6 +397,7 @@ export default function AppShell({
               showCadastral={showCadastral}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
+              onLassoSelect={handleLassoSelect}
               onNotice={flash}
             />
           ) : (
@@ -388,10 +416,10 @@ export default function AppShell({
             />
           )}
 
-          {/* 좁은 화면용 구역 요약. 왼쪽 위는 확대·축소와 내 위치 버튼이 쓰므로 오른쪽 위에 둔다.
+          {/* 좁은 화면용 요약 열. 왼쪽 위는 확대·축소와 마법 선택 버튼이 쓰므로 오른쪽 위에 둔다.
               오른쪽 패널이 뜨는 넓은 화면에서는 같은 내용이 겹치므로 숨긴다 */}
-          {showConsent && (
-            <div className="pointer-events-none absolute right-3 top-3 z-[1000] max-w-[62vw] md:hidden">
+          <div className="pointer-events-none absolute right-3 top-3 z-[1000] flex max-w-[62vw] flex-col gap-1.5 md:hidden">
+            {showConsent && (
               <ConsentSummary
                 zones={zones}
                 consent={consent}
@@ -402,8 +430,16 @@ export default function AppShell({
                 compact
                 onSetOwners={setZoneOwners}
               />
-            </div>
-          )}
+            )}
+            <SelectionSummary
+              selected={selected}
+              propsOf={propsOf}
+              consent={consent}
+              owners={selectionOwners}
+              onOwnersChange={setSelectionOwners}
+              compact
+            />
+          </div>
 
           <div className="pointer-events-none absolute bottom-6 left-1/2 z-[1000] flex -translate-x-1/2 flex-col items-center gap-2 text-center">
             <div className="md:hidden">
@@ -463,6 +499,14 @@ export default function AppShell({
                 onSetOwners={setZoneOwners}
               />
             )}
+
+            <SelectionSummary
+              selected={selected}
+              propsOf={propsOf}
+              consent={consent}
+              owners={selectionOwners}
+              onOwnersChange={setSelectionOwners}
+            />
 
             <ParcelPanel
               parcels={parcels}
