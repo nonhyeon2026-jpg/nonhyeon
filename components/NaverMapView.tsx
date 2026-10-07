@@ -471,10 +471,10 @@ export default function NaverMapView({
       const marker = new naver.maps.Marker({
         map: mapRef.current,
         position: new naver.maps.LatLng(b.anchor[0], shiftLng(b.anchor[1])),
-        title: `블록 면적 동의율 ${b.areaRatio}% · 필지 ${b.pnus.length}개`,
+        title: `블록 면적 동의율 ${b.areaRatio}% · ${b.people}명 제출 · 필지 ${b.pnus.length}개`,
         zIndex: 200000,
         icon: {
-          content: blockBadgeHtml(b.areaRatio),
+          content: blockBadgeHtml(b.areaRatio, b.people),
           anchor: new naver.maps.Point(BLOCK_BADGE_W / 2, BLOCK_BADGE_H / 2),
         },
       });

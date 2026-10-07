@@ -219,12 +219,12 @@ export default function MapView({
           key={b.id}
           position={[b.anchor[0], shiftLng(b.anchor[1])]}
           icon={divIcon({
-            html: blockBadgeHtml(b.areaRatio),
+            html: blockBadgeHtml(b.areaRatio, b.people),
             className: "",
             iconSize: [BLOCK_BADGE_W, BLOCK_BADGE_H],
             iconAnchor: [BLOCK_BADGE_W / 2, BLOCK_BADGE_H / 2],
           })}
-          title={`블록 면적 동의율 ${b.areaRatio}% · 필지 ${b.pnus.length}개`}
+          title={`블록 면적 동의율 ${b.areaRatio}% · ${b.people}명 제출 · 필지 ${b.pnus.length}개`}
           eventHandlers={{ click: () => onBlockClick(b) }}
         />
       ))}

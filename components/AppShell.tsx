@@ -187,7 +187,7 @@ export default function AppShell({
       setSelected(new Set(block.pnus));
       setFlyTo(null);
       flash(
-        `블록 ${block.pnus.length}필지 · 면적 동의율 ${block.areaRatio}% ` +
+        `블록 ${block.pnus.length}필지 · ${block.people}명 제출 · 면적 동의율 ${block.areaRatio}% ` +
           `(${Math.round(block.consentedArea).toLocaleString()}/${Math.round(block.area).toLocaleString()}㎡)`,
       );
     },

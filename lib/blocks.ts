@@ -1,7 +1,7 @@
 import { summarizeZone } from "./consent";
 import type { ConsentMap } from "./consent";
 import { pointInRing } from "./geo";
-import type { ParcelFeature, ParcelProps } from "./types";
+import type { ConsentInfo, ParcelFeature, ParcelProps } from "./types";
 
 /**
  * 블록(가구, 街區) — 도로로 둘러싸인 필지 덩어리.
@@ -266,9 +266,18 @@ export type BlockConsent = Block & {
   consentedArea: number;
   /** 면적 동의율(%) — 구역 카드의 면적 동의율과 같은 계산 */
   areaRatio: number;
+  /** 참여의향서를 낸 사람 수 (submitters 규칙) */
+  people: number;
 };
 
-/** 블록마다 면적 동의율을 매긴다. 계산은 구역 카드와 같은 summarizeZone 을 쓴다 */
+/**
+ * 명부 한 건에서 참여의향서를 낸 사람 수.
+ * 통건물 제출은 소유자 한 명이 낸 것이라 전 호가 동의여도 1명이다.
+ * 그 밖에는 호마다 한 명으로 센다 — 호 목록이 없으면 입력된 제출 호수를 쓴다.
+ */
+export const submitters = (c: ConsentInfo) => (c.wholeBuilding ? 1 : c.submitted);
+
+/** 블록마다 면적 동의율과 제출 인원을 매긴다. 면적은 구역 카드와 같은 summarizeZone 을 쓴다 */
 export function blockConsent(
   blocks: Block[],
   propsOf: Map<string, ParcelProps>,
@@ -276,6 +285,15 @@ export function blockConsent(
 ): BlockConsent[] {
   return blocks.map((b) => {
     const s = summarizeZone(b.pnus, propsOf, consent);
-    return { ...b, area: s.area, consentedArea: s.consentedArea, areaRatio: s.areaRatio };
+    // 딸림 지번은 대표 지번과 같은 문서라 한 번만 센다
+    const counted = new Set<string>();
+    let people = 0;
+    for (const pnu of b.pnus) {
+      const c = consent[pnu];
+      if (!c || counted.has(c.pnu)) continue;
+      counted.add(c.pnu);
+      people += submitters(c);
+    }
+    return { ...b, area: s.area, consentedArea: s.consentedArea, areaRatio: s.areaRatio, people };
   });
 }
