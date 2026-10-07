@@ -9,7 +9,9 @@ import {
   unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
+import { blockBadgeHtml, BLOCK_BADGE_SIZE } from "./blockBadge";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
 
 /* 네이버 지도 JS API v3 는 타입 패키지가 없으므로 최소한으로만 선언한다 */
@@ -87,10 +89,11 @@ export default function NaverMapView({
   zoneOf,
   visibleZoneIds,
   selected,
-  showConsent,
+  blocks,
   showCadastral,
   flyTo,
   onParcelClick,
+  onBlockClick,
   onLassoSelect,
   onLassoModeChange,
   onNotice,
@@ -103,11 +106,13 @@ export default function NaverMapView({
   zoneOf: Map<string, Zone>;
   visibleZoneIds: Set<string>;
   selected: Set<string>;
-  /** 참여의향서 제출률로 색칠하기 */
-  showConsent: boolean;
+  /** 블록별 면적 동의율. null 이면 원을 그리지 않는다 */
+  blocks: BlockConsent[] | null;
   showCadastral: boolean;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
+  /** 블록 원을 누르면 그 블록 필지를 고른다 */
+  onBlockClick: (block: BlockConsent) => void;
   /** 영역을 그려 고른 필지들 (마법 선택) */
   onLassoSelect: (pnus: string[], additive: boolean) => void;
   /** 영역을 찍는 중인지 — 그동안은 지도를 덮는 다른 카드를 치운다 */
@@ -126,6 +131,10 @@ export default function NaverMapView({
   clickRef.current = onParcelClick;
   const noticeRef = useRef(onNotice);
   noticeRef.current = onNotice;
+  const blockClickRef = useRef(onBlockClick);
+  blockClickRef.current = onBlockClick;
+  /** 블록 동의율 원 */
+  const blockMarkersRef = useRef<any[]>([]);
 
   const [ready, setReady] = useState(false);
   /** 지도 init 이벤트가 지났는지 — 네이버 지도는 컨트롤을 이 뒤에 만들어야 붙는다 */
@@ -343,7 +352,7 @@ export default function NaverMapView({
       const inVisibleZone = zone ? visibleZoneIds.has(zone.id) : false;
 
       if (!inView(pnu)) continue;
-      if (inVisibleZone || selected.has(pnu) || (showConsent && consentMap[pnu])) primary.push(f);
+      if (inVisibleZone || selected.has(pnu) || consentMap[pnu]) primary.push(f);
       else unzoned.push(f);
     }
 
@@ -358,7 +367,7 @@ export default function NaverMapView({
       const zone = zoneOf.get(pnu);
       const inVisibleZone = zone ? visibleZoneIds.has(zone.id) : false;
       const isSelected = selected.has(pnu);
-      const consent = showConsent ? consentMap[pnu] : undefined;
+      const consent = consentMap[pnu];
       /**
        * 구역에 편입된 필지는 명부에 한 호도 없어도 0% 로 칠한다.
        * 회색으로 두면 "자료 없음" 과 "아무도 안 냈음" 이 구분되지 않는다.
@@ -366,7 +375,7 @@ export default function NaverMapView({
       // 반올림하지 않는다 — 0.4% 가 0% 로 접히면 제출이 있는 필지가 빨강이 된다
       const ratio = consent
         ? (consent.submitted / consent.total) * 100
-        : showConsent && inVisibleZone
+        : inVisibleZone
           ? 0
           : null;
 
@@ -402,31 +411,15 @@ export default function NaverMapView({
           strokeWeight: 1.2,
           strokeOpacity: u.strokeOpacity,
         };
-      } else if (showConsent) {
-        // 제출률 레이어가 켜져 있을 때 명부에 없는 필지까지 구역 색(빨강)으로 두면
-        // 화면이 온통 빨강이 되어 그라디언트가 묻힌다. 배경으로 물린다.
+      } else {
+        // 명부에도 구역에도 없는 필지까지 칠하면 화면이 온통 색이 되어
+        // 그라디언트가 묻힌다. 배경으로 물린다.
         style = {
           fillColor: "#64748b",
           fillOpacity: 0.1,
           strokeColor: "#94a3b8",
           strokeWeight: 0.6,
           strokeOpacity: 0.45,
-        };
-      } else if (inVisibleZone) {
-        style = {
-          fillColor: zone!.color,
-          fillOpacity: 0.45,
-          strokeColor: zone!.color,
-          strokeWeight: 1,
-          strokeOpacity: 0.9,
-        };
-      } else {
-        style = {
-          fillColor: "#64748b",
-          fillOpacity: 0.12,
-          strokeColor: "#64748b",
-          strokeWeight: 0.6,
-          strokeOpacity: 0.5,
         };
       }
 
@@ -461,11 +454,38 @@ export default function NaverMapView({
     zoneOf,
     visibleZoneIds,
     selected,
-    showConsent,
     consentMap,
     polygonFor,
     boxes,
   ]);
+
+  /*
+   * 블록 동의율 원. 블록은 60개 남짓이라 화면 판정 없이 전부 올린다.
+   * 필지 폴리곤(zIndex 최대 100000)보다 위에 와야 가려지지 않는다.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const naver = window.naver;
+    for (const m of blockMarkersRef.current) m.setMap(null);
+    blockMarkersRef.current = (blocks ?? []).map((b) => {
+      const marker = new naver.maps.Marker({
+        map: mapRef.current,
+        position: new naver.maps.LatLng(b.anchor[0], shiftLng(b.anchor[1])),
+        title: `블록 면적 동의율 ${b.areaRatio}% · 필지 ${b.pnus.length}개`,
+        zIndex: 200000,
+        icon: {
+          content: blockBadgeHtml(b.areaRatio),
+          anchor: new naver.maps.Point(BLOCK_BADGE_SIZE / 2, BLOCK_BADGE_SIZE / 2),
+        },
+      });
+      naver.maps.Event.addListener(marker, "click", () => blockClickRef.current(b));
+      return marker;
+    });
+    return () => {
+      for (const m of blockMarkersRef.current) m.setMap(null);
+      blockMarkersRef.current = [];
+    };
+  }, [ready, blocks]);
 
   /* 컴포넌트가 사라질 때 정리 */
   useEffect(

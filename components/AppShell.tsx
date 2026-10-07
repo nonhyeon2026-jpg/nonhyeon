@@ -9,6 +9,8 @@ import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
 import SelectionSummary from "./SelectionSummary";
+import { blockConsent, computeBlocks } from "@/lib/blocks";
+import type { BlockConsent } from "@/lib/blocks";
 import { applyConsent, removeConsent as dropConsent } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type {
@@ -67,8 +69,8 @@ export default function AppShell({
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
-  /** 참여의향서 제출률로 필지를 색칠하는 레이어 — 이 지도의 주 용도라 기본으로 켠다 */
-  const [showConsent, setShowConsent] = useState(true);
+  /** 블록(도로로 둘러싸인 필지 덩어리)마다 면적 동의율 원을 띄운다 */
+  const [showBlocks, setShowBlocks] = useState(false);
   const [showCadastral, setShowCadastral] = useState(false);
   const [basemap, setBasemap] = useState<Basemap>("dark");
   const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
@@ -130,6 +132,19 @@ export default function AppShell({
     return m;
   }, [parcels]);
 
+  /** 보이는 구역의 블록. 지적도 모양에만 달려 있어 명부가 바뀌어도 다시 묶지 않는다 */
+  const blocks = useMemo(() => {
+    if (!showBlocks) return [];
+    const pnus = new Set<string>();
+    for (const z of zones) if (visibleZoneIds.has(z.id)) for (const p of z.parcels) pnus.add(p);
+    return computeBlocks(parcels.features, pnus);
+  }, [showBlocks, zones, visibleZoneIds, parcels]);
+
+  const blockRatios = useMemo<BlockConsent[] | null>(
+    () => (showBlocks ? blockConsent(blocks, propsOf, consent) : null),
+    [showBlocks, blocks, propsOf, consent],
+  );
+
   const handleParcelClick = useCallback((props: ParcelProps, additive: boolean) => {
     setSelected((prev) => {
       const next = additive ? new Set(prev) : new Set<string>();
@@ -161,6 +176,19 @@ export default function AppShell({
         pnus.length
           ? `${pnus.length.toLocaleString()}필지를 선택했습니다.`
           : "선 안에 온전히 들어온 구역 필지가 없습니다. 조금 넓게 그려보세요.",
+      );
+    },
+    [flash],
+  );
+
+  /** 블록 원을 누르면 그 블록 필지를 골라 오른쪽 카드에서 숫자를 보게 한다 */
+  const handleBlockClick = useCallback(
+    (block: BlockConsent) => {
+      setSelected(new Set(block.pnus));
+      setFlyTo(null);
+      flash(
+        `블록 ${block.pnus.length}필지 · 면적 동의율 ${block.areaRatio}% ` +
+          `(${Math.round(block.consentedArea).toLocaleString()}/${Math.round(block.area).toLocaleString()}㎡)`,
       );
     },
     [flash],
@@ -345,14 +373,16 @@ export default function AppShell({
           )}
 
           <button
-            onClick={() => setShowConsent((v) => !v)}
+            onClick={() => setShowBlocks((v) => !v)}
+            aria-pressed={showBlocks}
+            title="도로로 나뉜 블록마다 면적 동의율을 지도에 표시합니다"
             className={`rounded-lg px-3 py-1.5 text-xs transition ${
-              showConsent
+              showBlocks
                 ? "bg-emerald-600 text-white"
                 : "border border-slate-700 text-slate-400 hover:text-slate-200"
             }`}
           >
-            참여의향서
+            블록별
           </button>
 
           <button
@@ -395,10 +425,11 @@ export default function AppShell({
               zoneOf={zoneOf}
               visibleZoneIds={visibleZoneIds}
               selected={selected}
-              showConsent={showConsent}
+              blocks={blockRatios}
               showCadastral={showCadastral}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
+              onBlockClick={handleBlockClick}
               onLassoSelect={handleLassoSelect}
               onLassoModeChange={setDrawing}
               onNotice={flash}
@@ -412,10 +443,11 @@ export default function AppShell({
               zoneOf={zoneOf}
               visibleZoneIds={visibleZoneIds}
               selected={selected}
-              showConsent={showConsent}
+              blocks={blockRatios}
               basemap={basemap}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
+              onBlockClick={handleBlockClick}
             />
           )}
 
@@ -426,18 +458,16 @@ export default function AppShell({
               drawing ? "hidden" : ""
             }`}
           >
-            {showConsent && (
-              <ConsentSummary
-                zones={zones}
-                consent={consent}
-                visibleZoneIds={visibleZoneIds}
-                propsOf={propsOf}
-                adminMode={adminMode}
-                busy={busy}
-                compact
-                onSetOwners={setZoneOwners}
-              />
-            )}
+            <ConsentSummary
+              zones={zones}
+              consent={consent}
+              visibleZoneIds={visibleZoneIds}
+              propsOf={propsOf}
+              adminMode={adminMode}
+              busy={busy}
+              compact
+              onSetOwners={setZoneOwners}
+            />
             <SelectionSummary
               selected={selected}
               propsOf={propsOf}
@@ -505,7 +535,7 @@ export default function AppShell({
               280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
               고른 게 있는 동안 궁금한 건 그 범위의 숫자지 구역 전체가 아니다.
             */}
-            {showConsent && selected.size === 0 && (
+            {selected.size === 0 && (
               <ConsentSummary
                 zones={zones}
                 consent={consent}

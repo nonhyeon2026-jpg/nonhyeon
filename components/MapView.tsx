@@ -1,8 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { MapContainer, Polygon, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { divIcon } from "leaflet";
 import type { LatLngExpression } from "leaflet";
+import type { BlockConsent } from "@/lib/blocks";
+import { blockBadgeHtml, BLOCK_BADGE_SIZE } from "./blockBadge";
 import {
   consentColor,
   consentFillOpacity,
@@ -55,10 +58,11 @@ export default function MapView({
   zoneOf,
   visibleZoneIds,
   selected,
-  showConsent,
+  blocks,
   basemap,
   flyTo,
   onParcelClick,
+  onBlockClick,
 }: {
   parcels: ParcelCollection;
   boundary: { geometry: { coordinates: number[][][] } };
@@ -67,11 +71,13 @@ export default function MapView({
   zoneOf: Map<string, Zone>;
   visibleZoneIds: Set<string>;
   selected: Set<string>;
-  /** 참여의향서 제출률로 색칠하기 */
-  showConsent: boolean;
+  /** 블록별 면적 동의율. null 이면 원을 그리지 않는다 */
+  blocks: BlockConsent[] | null;
   basemap: Basemap;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
+  /** 블록 원을 누르면 그 블록 필지를 고른다 */
+  onBlockClick: (block: BlockConsent) => void;
 }) {
   const prepared = useMemo<PreparedParcel[]>(
     () =>
@@ -120,7 +126,7 @@ export default function MapView({
         const inVisibleZone = zone ? visibleZoneIds.has(zone.id) : false;
         const isSelected = selected.has(props.pnu);
 
-        const consent = showConsent ? consentMap[props.pnu] : undefined;
+        const consent = consentMap[props.pnu];
 
         /**
          * 구역에 편입된 필지는 명부에 한 호도 없어도 0% 로 칠한다.
@@ -129,7 +135,7 @@ export default function MapView({
         // 반올림하지 않는다 — 0.4% 가 0% 로 접히면 제출이 있는 필지가 빨강이 된다
         const consentRatio = consent
           ? (consent.submitted / consent.total) * 100
-          : showConsent && inVisibleZone
+          : inVisibleZone
             ? 0
             : null;
 
@@ -156,26 +162,12 @@ export default function MapView({
               fillColor: unsubmitted.color,
               fillOpacity: unsubmitted.fillOpacity,
             }
-          : showConsent
-          ? {
-              // 제출률 레이어가 켜져 있으면 명부에 없는 필지는 배경으로 물린다
+          : {
+              // 명부에도 구역에도 없는 필지는 배경으로 물린다
               color: "#94a3b8",
               weight: 0.6,
               fillColor: "#64748b",
               fillOpacity: 0.1,
-            }
-          : inVisibleZone
-          ? {
-              color: zone!.color,
-              weight: 1,
-              fillColor: zone!.color,
-              fillOpacity: 0.45,
-            }
-          : {
-              color: "#64748b",
-              weight: 0.5,
-              fillColor: "#475569",
-              fillOpacity: 0.12,
             };
 
         return (
@@ -221,6 +213,21 @@ export default function MapView({
           </Polygon>
         );
       })}
+
+      {blocks?.map((b) => (
+        <Marker
+          key={b.id}
+          position={[b.anchor[0], shiftLng(b.anchor[1])]}
+          icon={divIcon({
+            html: blockBadgeHtml(b.areaRatio),
+            className: "",
+            iconSize: [BLOCK_BADGE_SIZE, BLOCK_BADGE_SIZE],
+            iconAnchor: [BLOCK_BADGE_SIZE / 2, BLOCK_BADGE_SIZE / 2],
+          })}
+          title={`블록 면적 동의율 ${b.areaRatio}% · 필지 ${b.pnus.length}개`}
+          eventHandlers={{ click: () => onBlockClick(b) }}
+        />
+      ))}
 
       <FlyTo target={flyTo} />
     </MapContainer>
