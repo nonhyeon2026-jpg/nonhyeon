@@ -69,7 +69,7 @@ export default function AppShell({
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
-  /** 블록(도로로 둘러싸인 필지 덩어리)마다 면적 동의율 원을 띄운다 */
+  /** 블록(도로로 둘러싸인 필지 덩어리)마다 면적 동의율 표시를 띄운다 */
   const [showBlocks, setShowBlocks] = useState(false);
   const [showCadastral, setShowCadastral] = useState(false);
   const [basemap, setBasemap] = useState<Basemap>("dark");
@@ -181,7 +181,7 @@ export default function AppShell({
     [flash],
   );
 
-  /** 블록 원을 누르면 그 블록 필지를 골라 오른쪽 카드에서 숫자를 보게 한다 */
+  /** 블록 표시를 누르면 그 블록 필지를 골라 오른쪽 카드에서 숫자를 보게 한다 */
   const handleBlockClick = useCallback(
     (block: BlockConsent) => {
       setSelected(new Set(block.pnus));

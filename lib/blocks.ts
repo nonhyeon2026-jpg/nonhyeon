@@ -1,5 +1,6 @@
 import { summarizeZone } from "./consent";
 import type { ConsentMap } from "./consent";
+import { pointInRing } from "./geo";
 import type { ParcelFeature, ParcelProps } from "./types";
 
 /**
@@ -13,7 +14,7 @@ export type Block = {
   id: string;
   /** 블록에 든 필지 */
   pnus: string[];
-  /** 동의율 원을 놓을 자리 [lat, lng] */
+  /** 동의율 표시를 놓을 자리 [lat, lng] — 블록 모양의 한가운데 */
   anchor: [number, number];
 };
 
@@ -115,43 +116,147 @@ export function computeBlocks(features: ParcelFeature[], zonePnus: Set<string>):
   const blocks: Block[] = [];
   for (const idx of groups.values()) {
     const props = idx.map((i) => items[i].properties);
+    const [x, y] = centerOf(idx.map((i) => rings[i]));
     blocks.push({
       id: props.map((p) => p.pnu).sort()[0],
       pnus: props.map((p) => p.pnu),
-      anchor: anchorOf(props),
+      anchor: [lat0 + y / M_PER_DEG_LAT, lng0 + x / M_PER_DEG_LNG],
     });
   }
   return blocks;
 }
 
+/** 한가운데를 찾을 때 쓰는 격자 한 칸 (m) */
+const CELL_M = 1;
+
 /**
- * 원을 놓을 자리. 블록의 면적 무게중심은 ㄱ자·ㄷ자 블록에서 도로 위로 빠질 수 있어,
- * 그 무게중심에 가장 가까운 필지의 중심을 쓴다 — 늘 블록 안쪽에 앉는다.
+ * 블록 모양의 한가운데 — 경계에서 가장 멀리 떨어진 안쪽 점 (미터 평면 좌표).
+ *
+ * 면적 무게중심은 ㄱ자·ㄷ자 블록에서 도로 위로 빠지고, 필지 중심을 쓰면 블록
+ * 가장자리 필지에 앉기도 한다. 블록을 1m 격자로 깔고 칸마다 바깥까지의 거리를
+ * 재서, 가장 깊숙한 칸들 가운데 무게중심에 가까운 칸을 고른다.
+ * 길쭉한 블록은 깊이가 같은 칸이 한 줄로 늘어서므로 그중 가운데로 온다.
  */
-function anchorOf(props: ParcelProps[]): [number, number] {
-  let w = 0;
-  let lat = 0;
-  let lng = 0;
-  for (const p of props) {
-    w += p.area;
-    lat += p.centroid[0] * p.area;
-    lng += p.centroid[1] * p.area;
-  }
-  if (!w) return props[0].centroid;
-  lat /= w;
-  lng /= w;
-  let best = props[0].centroid;
-  let bestD = Infinity;
-  for (const p of props) {
-    const dLat = (p.centroid[0] - lat) * M_PER_DEG_LAT;
-    const dLng = (p.centroid[1] - lng) * M_PER_DEG_LNG;
-    const d = dLat * dLat + dLng * dLng;
-    if (d < bestD) {
-      bestD = d;
-      best = p.centroid;
+function centerOf(rings: Pt[][]): Pt {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const r of rings) {
+    for (const [x, y] of r) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
     }
   }
-  return best;
+  // 바깥 테두리에 빈 칸을 한 줄씩 둬야 가장자리 칸의 거리가 바르게 잡힌다
+  minX -= CELL_M;
+  minY -= CELL_M;
+  const w = Math.ceil((maxX - minX) / CELL_M) + 2;
+  const h = Math.ceil((maxY - minY) / CELL_M) + 2;
+  const cx = (i: number) => minX + (i + 0.5) * CELL_M;
+  const cy = (j: number) => minY + (j + 0.5) * CELL_M;
+
+  // 1) 칸 중심이 어느 필지 안에 들면 블록 안
+  let inside = new Uint8Array(w * h);
+  for (const r of rings) {
+    let rx0 = Infinity;
+    let rx1 = -Infinity;
+    let ry0 = Infinity;
+    let ry1 = -Infinity;
+    for (const [x, y] of r) {
+      if (x < rx0) rx0 = x;
+      if (x > rx1) rx1 = x;
+      if (y < ry0) ry0 = y;
+      if (y > ry1) ry1 = y;
+    }
+    const i0 = Math.max(0, Math.floor((rx0 - minX) / CELL_M));
+    const i1 = Math.min(w - 1, Math.ceil((rx1 - minX) / CELL_M));
+    const j0 = Math.max(0, Math.floor((ry0 - minY) / CELL_M));
+    const j1 = Math.min(h - 1, Math.ceil((ry1 - minY) / CELL_M));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (!inside[j * w + i] && pointInRing(r, cx(i), cy(j))) inside[j * w + i] = 1;
+      }
+    }
+  }
+
+  // 2) 필지 사이 지적선의 실금이 바깥으로 잡히지 않게 한 칸 메운다 (팽창 → 침식)
+  const morph = (src: Uint8Array, grow: boolean) => {
+    const out = new Uint8Array(w * h);
+    for (let j = 1; j < h - 1; j++) {
+      for (let i = 1; i < w - 1; i++) {
+        const k = j * w + i;
+        const n = [k, k - 1, k + 1, k - w, k + w].map((q) => src[q]);
+        out[k] = grow ? (n.some(Boolean) ? 1 : 0) : n.every(Boolean) ? 1 : 0;
+      }
+    }
+    return out;
+  };
+  inside = morph(morph(inside, true), false);
+
+  // 3) 바깥까지의 거리 (체스판 거리, 앞뒤 두 번 훑기)
+  const dist = new Float32Array(w * h);
+  for (let k = 0; k < w * h; k++) dist[k] = inside[k] ? Infinity : 0;
+  const D = Math.SQRT2;
+  for (let j = 1; j < h; j++) {
+    for (let i = 1; i < w - 1; i++) {
+      const k = j * w + i;
+      if (!dist[k]) continue;
+      dist[k] = Math.min(dist[k], dist[k - 1] + 1, dist[k - w] + 1, dist[k - w - 1] + D, dist[k - w + 1] + D);
+    }
+  }
+  for (let j = h - 2; j >= 0; j--) {
+    for (let i = w - 2; i >= 1; i--) {
+      const k = j * w + i;
+      if (!dist[k]) continue;
+      dist[k] = Math.min(dist[k], dist[k + 1] + 1, dist[k + w] + 1, dist[k + w + 1] + D, dist[k + w - 1] + D);
+    }
+  }
+
+  // 4) 블록 칸들의 무게중심
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  let best = 0;
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      const d = dist[j * w + i];
+      if (!d) continue;
+      sx += cx(i);
+      sy += cy(j);
+      n += 1;
+      if (d > best) best = d;
+    }
+  }
+  // 칸이 하나도 안 잡힐 만큼 작은 블록은 꼭짓점 평균으로 갈음한다
+  if (!n) {
+    const pts = rings.flat();
+    return [
+      pts.reduce((a, p) => a + p[0], 0) / pts.length,
+      pts.reduce((a, p) => a + p[1], 0) / pts.length,
+    ];
+  }
+  sx /= n;
+  sy /= n;
+
+  // 5) 거의 가장 깊은 칸들 가운데 무게중심에 가장 가까운 칸
+  let pick: Pt = [sx, sy];
+  let pickD = Infinity;
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      if (dist[j * w + i] < best * 0.85) continue;
+      const dx = cx(i) - sx;
+      const dy = cy(j) - sy;
+      const d = dx * dx + dy * dy;
+      if (d < pickD) {
+        pickD = d;
+        pick = [cx(i), cy(j)];
+      }
+    }
+  }
+  return pick;
 }
 
 export type BlockConsent = Block & {

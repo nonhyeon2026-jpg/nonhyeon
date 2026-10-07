@@ -11,7 +11,7 @@ import {
 import type { ConsentMap } from "@/lib/consent";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
-import { blockBadgeHtml, BLOCK_BADGE_SIZE } from "./blockBadge";
+import { blockBadgeHtml, BLOCK_BADGE_H, BLOCK_BADGE_W } from "./blockBadge";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
 
 /* 네이버 지도 JS API v3 는 타입 패키지가 없으므로 최소한으로만 선언한다 */
@@ -106,12 +106,12 @@ export default function NaverMapView({
   zoneOf: Map<string, Zone>;
   visibleZoneIds: Set<string>;
   selected: Set<string>;
-  /** 블록별 면적 동의율. null 이면 원을 그리지 않는다 */
+  /** 블록별 면적 동의율. null 이면 표시를 그리지 않는다 */
   blocks: BlockConsent[] | null;
   showCadastral: boolean;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
-  /** 블록 원을 누르면 그 블록 필지를 고른다 */
+  /** 블록 표시를 누르면 그 블록 필지를 고른다 */
   onBlockClick: (block: BlockConsent) => void;
   /** 영역을 그려 고른 필지들 (마법 선택) */
   onLassoSelect: (pnus: string[], additive: boolean) => void;
@@ -133,7 +133,7 @@ export default function NaverMapView({
   noticeRef.current = onNotice;
   const blockClickRef = useRef(onBlockClick);
   blockClickRef.current = onBlockClick;
-  /** 블록 동의율 원 */
+  /** 블록 동의율 표시 */
   const blockMarkersRef = useRef<any[]>([]);
 
   const [ready, setReady] = useState(false);
@@ -460,7 +460,7 @@ export default function NaverMapView({
   ]);
 
   /*
-   * 블록 동의율 원. 블록은 60개 남짓이라 화면 판정 없이 전부 올린다.
+   * 블록 동의율 표시. 블록은 60개 남짓이라 화면 판정 없이 전부 올린다.
    * 필지 폴리곤(zIndex 최대 100000)보다 위에 와야 가려지지 않는다.
    */
   useEffect(() => {
@@ -475,7 +475,7 @@ export default function NaverMapView({
         zIndex: 200000,
         icon: {
           content: blockBadgeHtml(b.areaRatio),
-          anchor: new naver.maps.Point(BLOCK_BADGE_SIZE / 2, BLOCK_BADGE_SIZE / 2),
+          anchor: new naver.maps.Point(BLOCK_BADGE_W / 2, BLOCK_BADGE_H / 2),
         },
       });
       naver.maps.Event.addListener(marker, "click", () => blockClickRef.current(b));

@@ -5,7 +5,7 @@ import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap } from "react
 import { divIcon } from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import type { BlockConsent } from "@/lib/blocks";
-import { blockBadgeHtml, BLOCK_BADGE_SIZE } from "./blockBadge";
+import { blockBadgeHtml, BLOCK_BADGE_H, BLOCK_BADGE_W } from "./blockBadge";
 import {
   consentColor,
   consentFillOpacity,
@@ -71,12 +71,12 @@ export default function MapView({
   zoneOf: Map<string, Zone>;
   visibleZoneIds: Set<string>;
   selected: Set<string>;
-  /** 블록별 면적 동의율. null 이면 원을 그리지 않는다 */
+  /** 블록별 면적 동의율. null 이면 표시를 그리지 않는다 */
   blocks: BlockConsent[] | null;
   basemap: Basemap;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
-  /** 블록 원을 누르면 그 블록 필지를 고른다 */
+  /** 블록 표시를 누르면 그 블록 필지를 고른다 */
   onBlockClick: (block: BlockConsent) => void;
 }) {
   const prepared = useMemo<PreparedParcel[]>(
@@ -221,8 +221,8 @@ export default function MapView({
           icon={divIcon({
             html: blockBadgeHtml(b.areaRatio),
             className: "",
-            iconSize: [BLOCK_BADGE_SIZE, BLOCK_BADGE_SIZE],
-            iconAnchor: [BLOCK_BADGE_SIZE / 2, BLOCK_BADGE_SIZE / 2],
+            iconSize: [BLOCK_BADGE_W, BLOCK_BADGE_H],
+            iconAnchor: [BLOCK_BADGE_W / 2, BLOCK_BADGE_H / 2],
           })}
           title={`블록 면적 동의율 ${b.areaRatio}% · 필지 ${b.pnus.length}개`}
           eventHandlers={{ click: () => onBlockClick(b) }}
