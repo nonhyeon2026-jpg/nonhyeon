@@ -1,4 +1,4 @@
-import { summarizeZone } from "./consent";
+import { ownerBasisOf, summarizeZone } from "./consent";
 import type { ConsentMap } from "./consent";
 import { pointInRing } from "./geo";
 import type { ParcelFeature, ParcelProps } from "./types";
@@ -61,7 +61,10 @@ function touches(a: Pt[], b: Pt[]): boolean {
 /** 구역 필지들을 블록으로 묶는다. 필지 데이터가 없으면 빈 배열 */
 export function computeBlocks(features: ParcelFeature[], zonePnus: Set<string>): Block[] {
   const items = features.filter(
-    (f) => zonePnus.has(f.properties.pnu) && !DIVIDER_CATEGORIES.has(f.properties.category),
+    (f) =>
+      zonePnus.has(f.properties.pnu) &&
+      // 지목만 도로이고 건물이 앉은 필지(176-4 등)는 실제로는 대지라 블록에 넣는다
+      !(DIVIDER_CATEGORIES.has(f.properties.category) && !f.properties.building),
   );
   if (!items.length) return [];
 
@@ -294,22 +297,39 @@ export type BlockConsent = Block & {
   areaRatio: number;
   /** 참여의향서를 낸 사람 수 (submitters 규칙) */
   people: number;
+  /** 추정 소유자 수 — 지도의 소유자 숫자를 블록 안에서 더한 값 */
+  owners: number;
+  /** 소유자 동의율(%) = 제출 인원 / 추정 소유자. 면적처럼 소수점 한 자리까지 */
+  ownerRatio: number;
 };
 
-/** 블록마다 면적 동의율과 제출 인원을 매긴다. 면적은 구역 카드와 같은 summarizeZone 을 쓴다 */
+/**
+ * 블록마다 면적 동의율·소유자 동의율·제출 인원을 매긴다. 면적은 구역 카드와 같은 summarizeZone 을 쓴다.
+ *
+ * 소유자는 필지마다 ownerBasisOf 로 센다. 딸림 지번과 대표 지번이 다른 블록에 갈려도
+ * 그 건물은 한 블록에서만 세어지도록, 필지가 속한 구역 범위(scopeOf)를 같이 넘긴다.
+ * 그래야 블록 소유자를 다 더한 값이 지도 소유자 숫자의 합계와 맞는다.
+ */
 export function blockConsent(
   blocks: Block[],
   propsOf: Map<string, ParcelProps>,
   consent: ConsentMap,
+  scopeOf?: Map<string, Set<string>>,
 ): BlockConsent[] {
   return blocks.map((b) => {
     const s = summarizeZone(b.pnus, propsOf, consent);
+    const owners = b.pnus.reduce(
+      (a, p) => a + (ownerBasisOf(p, propsOf, consent, scopeOf?.get(p))?.owners ?? 0),
+      0,
+    );
     return {
       ...b,
       area: s.area,
       consentedArea: s.consentedArea,
       areaRatio: s.areaRatio,
       people: s.people,
+      owners,
+      ownerRatio: owners ? Math.round((s.people / owners) * 1000) / 10 : 0,
     };
   });
 }

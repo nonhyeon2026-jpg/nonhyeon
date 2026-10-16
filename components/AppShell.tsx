@@ -12,6 +12,9 @@ import SelectionSummary from "./SelectionSummary";
 import OwnerLegend from "./OwnerLegend";
 import type { OwnerMark } from "./ownerBadge";
 import { blockConsent, computeBlocks, parcelAnchor } from "@/lib/blocks";
+import BlockLegend from "./BlockLegend";
+import { BLOCK_ROW_KEYS } from "./blockBadge";
+import type { BlockRowKey } from "./blockBadge";
 import type { BlockConsent } from "@/lib/blocks";
 import { applyConsent, removeConsent as dropConsent, ownerBasisOf } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
@@ -77,6 +80,16 @@ export default function AppShell({
    */
   const [overlay, setOverlay] = useState<"none" | "blocks" | "owners">("none");
   const showBlocks = overlay === "blocks";
+  /** 블록 표시에 띄울 줄. 하나는 늘 남겨 둔다 */
+  const [blockRows, setBlockRows] = useState<BlockRowKey[]>(BLOCK_ROW_KEYS);
+  const toggleBlockRow = (k: BlockRowKey) =>
+    setBlockRows((v) =>
+      v.includes(k)
+        ? v.length > 1
+          ? v.filter((x) => x !== k)
+          : v
+        : BLOCK_ROW_KEYS.filter((x) => x === k || v.includes(x)),
+    );
   const showOwners = overlay === "owners";
   const toggleOverlay = (o: "blocks" | "owners") => setOverlay((v) => (v === o ? "none" : o));
   const [showCadastral, setShowCadastral] = useState(false);
@@ -149,8 +162,18 @@ export default function AppShell({
   }, [showBlocks, zones, visibleZoneIds, parcels]);
 
   const blockRatios = useMemo<BlockConsent[] | null>(
-    () => (showBlocks ? blockConsent(blocks, propsOf, consent) : null),
-    [showBlocks, blocks, propsOf, consent],
+    () => {
+      if (!showBlocks) return null;
+      // 소유자는 구역 범위로 센다 — 소유자 표시의 숫자와 같은 값이 되도록
+      const scopeOf = new Map<string, Set<string>>();
+      for (const z of zones) {
+        if (!visibleZoneIds.has(z.id)) continue;
+        const scope = new Set(z.parcels);
+        for (const p of z.parcels) scopeOf.set(p, scope);
+      }
+      return blockConsent(blocks, propsOf, consent, scopeOf);
+    },
+    [showBlocks, blocks, propsOf, consent, zones, visibleZoneIds],
   );
 
   /**
@@ -243,8 +266,9 @@ export default function AppShell({
       setSelected(new Set(block.pnus));
       setFlyTo(null);
       flash(
-        `블록 ${block.pnus.length}필지 · ${block.people}명 제출 · 면적 동의율 ${block.areaRatio}% ` +
-          `(${Math.round(block.consentedArea).toLocaleString()}/${Math.round(block.area).toLocaleString()}㎡)`,
+        `블록 ${block.pnus.length}필지 · 면적 동의율 ${block.areaRatio}% ` +
+          `(${Math.round(block.consentedArea).toLocaleString()}/${Math.round(block.area).toLocaleString()}㎡) · ` +
+          `소유자 동의율 ${block.ownerRatio}% (${block.people}/${block.owners}명)`,
       );
     },
     [flash],
@@ -441,7 +465,7 @@ export default function AppShell({
           <button
             onClick={() => toggleOverlay("blocks")}
             aria-pressed={showBlocks}
-            title="도로로 나뉜 블록마다 면적 동의율을 지도에 표시합니다"
+            title="도로로 나뉜 블록마다 면적 동의율·소유자 동의율·동의자 수를 지도에 표시합니다"
             className={`rounded-lg px-3 py-1.5 text-xs transition ${
               showBlocks
                 ? "bg-emerald-600 text-white"
@@ -505,6 +529,7 @@ export default function AppShell({
               visibleZoneIds={visibleZoneIds}
               selected={selected}
               blocks={blockRatios}
+              blockRows={blockRows}
               owners={ownerMarks}
               showCadastral={showCadastral}
               flyTo={flyTo}
@@ -525,6 +550,7 @@ export default function AppShell({
               visibleZoneIds={visibleZoneIds}
               selected={selected}
               blocks={blockRatios}
+              blockRows={blockRows}
               owners={ownerMarks}
               basemap={basemap}
               flyTo={flyTo}
@@ -543,6 +569,7 @@ export default function AppShell({
             }`}
           >
             {ownerMarks && <OwnerLegend marks={ownerMarks} compact />}
+            {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} compact />}
             <ConsentSummary
               zones={zones}
               consent={consent}
@@ -620,8 +647,9 @@ export default function AppShell({
               280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
               고른 게 있는 동안 궁금한 건 그 범위의 숫자지 구역 전체가 아니다.
             */}
-            {/* 소유자 표시의 범례·합계. 지도 오른쪽 아래는 이 열이 덮으므로 열 맨 위에 둔다 */}
+            {/* 소유자·블록 표시의 범례. 지도 오른쪽 아래는 이 열이 덮으므로 열 맨 위에 둔다 */}
             {ownerMarks && <OwnerLegend marks={ownerMarks} />}
+            {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} />}
 
             {selected.size === 0 && (
               <ConsentSummary

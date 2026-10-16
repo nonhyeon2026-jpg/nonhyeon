@@ -11,7 +11,8 @@ import {
 import type { ConsentMap } from "@/lib/consent";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
-import { blockBadgeHtml, BLOCK_BADGE_H, BLOCK_BADGE_W } from "./blockBadge";
+import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W } from "./blockBadge";
+import type { BlockRowKey } from "./blockBadge";
 import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
 import type { OwnerMark } from "./ownerBadge";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
@@ -98,6 +99,7 @@ export default function NaverMapView({
   visibleZoneIds,
   selected,
   blocks,
+  blockRows,
   owners,
   showCadastral,
   flyTo,
@@ -118,6 +120,8 @@ export default function NaverMapView({
   selected: Set<string>;
   /** 블록별 면적 동의율. null 이면 표시를 그리지 않는다 */
   blocks: BlockConsent[] | null;
+  /** 블록 표시에 띄울 줄 (면적 동의율·소유자 동의율·동의자 수) */
+  blockRows: BlockRowKey[];
   /** 필지별 추정 소유자 수. null 이면 표시를 그리지 않는다 */
   owners: OwnerMark[] | null;
   showCadastral: boolean;
@@ -393,9 +397,11 @@ export default function NaverMapView({
        * 회색으로 두면 "자료 없음" 과 "아무도 안 냈음" 이 구분되지 않는다.
        */
       // 반올림하지 않는다 — 0.4% 가 0% 로 접히면 제출이 있는 필지가 빨강이 된다
-      const ratio = consent
+      // 명부에 올랐어도 한 호도 안 냈으면(제출 0) 참여의향서 없는 필지와 같이 칠한다
+      const submitted = consent && consent.submitted > 0;
+      const ratio = submitted
         ? (consent.submitted / consent.total) * 100
-        : inVisibleZone
+        : inVisibleZone || consent
           ? 0
           : null;
 
@@ -409,7 +415,7 @@ export default function NaverMapView({
        */
       let style: Record<string, unknown>;
 
-      if (consent) {
+      if (submitted) {
         // 제출률 색이 구역 색보다 우선한다 — 두 색을 겹치면 어느 쪽도 읽히지 않는다
         const color = consentColor(ratio!);
         style = {
@@ -491,11 +497,11 @@ export default function NaverMapView({
       const marker = new naver.maps.Marker({
         map: mapRef.current,
         position: new naver.maps.LatLng(b.anchor[0], shiftLng(b.anchor[1])),
-        title: `블록 면적 동의율 ${b.areaRatio}% · ${b.people}명 제출 · 필지 ${b.pnus.length}개`,
+        title: `블록 면적 동의율 ${b.areaRatio}% · 소유자 동의율 ${b.ownerRatio}% (${b.people}/${b.owners}명) · 필지 ${b.pnus.length}개`,
         zIndex: 200000,
         icon: {
-          content: blockBadgeHtml(b.areaRatio, b.people),
-          anchor: new naver.maps.Point(BLOCK_BADGE_W / 2, BLOCK_BADGE_H / 2),
+          content: blockBadgeHtml(b, blockRows),
+          anchor: new naver.maps.Point(BLOCK_BADGE_W / 2, blockBadgeH(blockRows.length) / 2),
         },
       });
       naver.maps.Event.addListener(marker, "click", () => blockClickRef.current(b));
@@ -505,7 +511,7 @@ export default function NaverMapView({
       for (const m of blockMarkersRef.current) m.setMap(null);
       blockMarkersRef.current = [];
     };
-  }, [ready, blocks]);
+  }, [ready, blocks, blockRows]);
 
   /*
    * 소유자 수 표시. 구역 필지마다 하나라 수백 개다. 마커는 목록이 바뀔 때 한 번 만들고,
