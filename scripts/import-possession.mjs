@@ -1,5 +1,5 @@
 /**
- * VWorld 토지소유정보(getPossessionAttr) → public/parcels.json 의 building.owners 병합.
+ * VWorld 토지소유정보(getPossessionAttr) → public/parcels.json 의 building.owners · land 병합.
  *
  *   PowerShell: $env:VWORLD_KEY="키"; $env:VWORLD_DOMAIN="도메인"; npm run import:possession
  *
@@ -175,10 +175,15 @@ export function estimateOwners(rows) {
 const parcels = JSON.parse(readFileSync(PARCELS_PATH, "utf8"));
 const cache = existsSync(CACHE_PATH) ? JSON.parse(readFileSync(CACHE_PATH, "utf8")) : {};
 
+/*
+ * 집합건축물뿐 아니라 일반건축물·빈 땅도 받는다. 일반건축물은 호 행 없이 땅 소유자가
+ * 사람마다 한 줄씩 나와, 땅을 여럿이 지분으로 나눠 가진 필지를 가려낼 수 있다
+ * (153-1: 단독·근생 11개 동이 앉은 땅을 17명이 공유). 지번 없는 관리용 필지는 뺀다.
+ */
 const targets = parcels.features.filter(
-  (f) => f.properties.building?.collective > 0 && !(f.properties.pnu in cache),
+  (f) => f.properties.bonbun > 0 && !(f.properties.pnu in cache),
 );
-console.log(`집합건축물 필지 중 조회 대상 ${targets.length}개 (캐시 ${Object.keys(cache).length}개)`);
+console.log(`조회 대상 ${targets.length}개 (캐시 ${Object.keys(cache).length}개)`);
 
 let done = 0;
 let failed = 0;
@@ -214,16 +219,47 @@ const signature = (rows) =>
     .join(",");
 const firstBySig = new Map();
 
+/**
+ * 땅 소유자. 호 행이 없는 필지는 소유자마다 한 줄이라 공유인 일련번호가 다른 줄 수가 곧 공유자 수다.
+ */
+function landOwners(rows) {
+  const land = rows.filter((r) => !isUnitRow(r));
+  if (!land.length) return null;
+  const people = new Map();
+  for (const r of land) people.set(r.sn, r);
+  return {
+    owners: people.size,
+    corporate: [...people.values()].filter((r) => r.kind && r.kind !== "개인").length,
+    asOf: land[0]?.ym ?? null,
+  };
+}
+
 let merged = 0;
 let units = 0;
 let owners = 0;
 const patterns = { whole: 0, partial: 0, none: 0, check: 0, noUnits: 0, sameAs: 0 };
+const landStat = { parcels: 0, shared: 0, owners: 0 };
 
 for (const f of parcels.features) {
-  const b = f.properties.building;
-  if (!b) continue;
   const rows = cache[f.properties.pnu];
-  if (!b.collective || !rows?.length) {
+  const b = f.properties.building;
+
+  // 집합건축물이 아닌 필지(일반건축물·빈 땅)는 땅 공유자를 붙인다
+  if (!b?.collective) {
+    if (b) delete b.owners;
+    const land = rows?.length ? landOwners(rows) : null;
+    if (land) {
+      f.properties.land = land;
+      landStat.parcels += 1;
+      landStat.owners += land.owners;
+      if (land.owners > 1) landStat.shared += 1;
+    } else {
+      delete f.properties.land;
+    }
+    continue;
+  }
+  delete f.properties.land;
+  if (!rows?.length) {
     delete b.owners;
     continue;
   }
@@ -259,4 +295,7 @@ console.log(`
 console.log(`호 ${units.toLocaleString()} → 추정 소유자 ${owners.toLocaleString()}명`);
 console.log(
   `통건물 ${patterns.whole} · 일부 묶음 ${patterns.partial} · 묶음 없음 ${patterns.none} · 확인 필요 ${patterns.check}`,
-)
+);
+console.log(
+  `일반건축물·땅 ${landStat.parcels}필지 → 땅 소유자 ${landStat.owners.toLocaleString()}명 (공유 ${landStat.shared}필지)`,
+);

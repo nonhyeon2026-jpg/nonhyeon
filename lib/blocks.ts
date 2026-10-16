@@ -135,12 +135,25 @@ export function parcelAnchor(f: ParcelFeature): [number, number] {
   const ring = f.geometry.coordinates[0].map(
     ([lng, lat]) => [(lng - lng0) * M_PER_DEG_LNG, (lat - lat0) * M_PER_DEG_LAT] as Pt,
   );
-  const [x, y] = centerOf([ring]);
+  // 큰 필지(5만㎡ 도로 등)를 1m 격자로 깔면 필지 하나에 몇 초가 걸린다.
+  // 칸 수가 ANCHOR_MAX_CELLS 를 넘지 않게 격자를 키운다 — 표시 위치로는 몇 m 오차면 충분하다
+  let w = 0;
+  let h = 0;
+  {
+    const xs = ring.map((p) => p[0]);
+    const ys = ring.map((p) => p[1]);
+    w = Math.max(...xs) - Math.min(...xs);
+    h = Math.max(...ys) - Math.min(...ys);
+  }
+  const cell = Math.max(CELL_M, Math.sqrt((w * h) / ANCHOR_MAX_CELLS));
+  const [x, y] = centerOf([ring], cell);
   return [lat0 + y / M_PER_DEG_LAT, lng0 + x / M_PER_DEG_LNG];
 }
 
 /** 한가운데를 찾을 때 쓰는 격자 한 칸 (m) */
 const CELL_M = 1;
+/** 필지 한가운데를 찾을 때 격자 칸 수의 상한 */
+const ANCHOR_MAX_CELLS = 4000;
 
 /**
  * 블록 모양의 한가운데 — 경계에서 가장 멀리 떨어진 안쪽 점 (미터 평면 좌표).
@@ -150,7 +163,7 @@ const CELL_M = 1;
  * 재서, 가장 깊숙한 칸들 가운데 무게중심에 가까운 칸을 고른다.
  * 길쭉한 블록은 깊이가 같은 칸이 한 줄로 늘어서므로 그중 가운데로 온다.
  */
-function centerOf(rings: Pt[][]): Pt {
+function centerOf(rings: Pt[][], cell = CELL_M): Pt {
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -164,12 +177,12 @@ function centerOf(rings: Pt[][]): Pt {
     }
   }
   // 바깥 테두리에 빈 칸을 한 줄씩 둬야 가장자리 칸의 거리가 바르게 잡힌다
-  minX -= CELL_M;
-  minY -= CELL_M;
-  const w = Math.ceil((maxX - minX) / CELL_M) + 2;
-  const h = Math.ceil((maxY - minY) / CELL_M) + 2;
-  const cx = (i: number) => minX + (i + 0.5) * CELL_M;
-  const cy = (j: number) => minY + (j + 0.5) * CELL_M;
+  minX -= cell;
+  minY -= cell;
+  const w = Math.ceil((maxX - minX) / cell) + 2;
+  const h = Math.ceil((maxY - minY) / cell) + 2;
+  const cx = (i: number) => minX + (i + 0.5) * cell;
+  const cy = (j: number) => minY + (j + 0.5) * cell;
 
   // 1) 칸 중심이 어느 필지 안에 들면 블록 안
   let inside = new Uint8Array(w * h);
@@ -184,10 +197,10 @@ function centerOf(rings: Pt[][]): Pt {
       if (y < ry0) ry0 = y;
       if (y > ry1) ry1 = y;
     }
-    const i0 = Math.max(0, Math.floor((rx0 - minX) / CELL_M));
-    const i1 = Math.min(w - 1, Math.ceil((rx1 - minX) / CELL_M));
-    const j0 = Math.max(0, Math.floor((ry0 - minY) / CELL_M));
-    const j1 = Math.min(h - 1, Math.ceil((ry1 - minY) / CELL_M));
+    const i0 = Math.max(0, Math.floor((rx0 - minX) / cell));
+    const i1 = Math.min(w - 1, Math.ceil((rx1 - minX) / cell));
+    const j0 = Math.max(0, Math.floor((ry0 - minY) / cell));
+    const j1 = Math.min(h - 1, Math.ceil((ry1 - minY) / cell));
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         if (!inside[j * w + i] && pointInRing(r, cx(i), cy(j))) inside[j * w + i] = 1;

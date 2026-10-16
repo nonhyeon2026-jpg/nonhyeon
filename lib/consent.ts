@@ -105,9 +105,10 @@ export function parcelOwners(props: ParcelProps, c?: ConsentInfo): number {
 /**
  * 추정 소유자 수의 성격. 지도 표시의 색을 가른다.
  * whole: 한 사람이 건물을 다 가짐 · grouped: 일부 호를 한 사람이 여럿 가짐 ·
- * units: 호마다 따로 · single: 일반건축물·땅이라 1명 · check: 공동건축주 의심 · none: 따로 세지 않음
+ * units: 호마다 따로 · single: 일반건축물·땅이라 1명 · shared: 한 땅에 여러 동, 동마다 주인 ·
+ * check: 공동건축주 의심 · none: 따로 세지 않음
  */
-export type OwnerTone = "whole" | "grouped" | "units" | "single" | "check" | "none";
+export type OwnerTone = "whole" | "grouped" | "units" | "single" | "shared" | "check" | "none";
 
 export type OwnerBasis = {
   owners: number;
@@ -199,21 +200,45 @@ export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
         "토지소유정보에 호별 기록이 없어(대지권 미등기 등) 건축물대장 호수를 그대로 씁니다",
       ],
     };
-  } else if (b) {
-    const kind = b.housingType ?? b.usage ?? "일반건축물";
-    const many = Math.max(b.households ?? 0, b.families ?? 0, b.hoCnt ?? 0);
-    base = {
-      owners: 1,
-      tone: "single",
-      reasons: [
-        `일반건축물(${kind}) — 1명`,
-        many > 1
-          ? `대장에 ${many}가구·호가 있지만 구분소유가 아니라 건물 전체가 한 소유입니다`
-          : "구분소유가 아닌 건물이라 한 소유입니다",
-      ],
-    };
   } else {
-    base = { owners: 1, tone: "single", reasons: ["건물 없는 땅 — 토지 소유자 1명"] };
+    /*
+     * 일반건축물·빈 땅. 구분소유가 아니라 호·가구로는 사람을 나눌 수 없다.
+     * 공동명의(한 집·한 땅을 여럿이 공유)는 1명으로 센다. 다만 한 땅에 주건축물이 여러 동
+     * 앉아 있으면 동마다 주인이 따로일 수 있어, 땅 공유자 수를 넘지 않는 선에서 동마다 1명으로
+     * 센다 (153-1: 단독·근생 11개 동, 땅 공유자 18명 → 11명). 자료가 없으면 1명이다.
+     */
+    const land = props.land;
+    const dongs = b ? (b.mainCount ?? b.count) : 0;
+    const what = b
+      ? `일반건축물(${b.housingType ?? b.usage ?? "용도 미상"}${dongs > 1 ? ` ${dongs}개 동` : ""})`
+      : "건물 없는 땅";
+    const asOf = land?.asOf ? ` (토지소유정보 ${land.asOf} 기준)` : " (토지소유정보)";
+    const sharers = land?.owners ?? 1;
+    const owners = Math.max(1, Math.min(sharers, dongs));
+    if (owners > 1) {
+      base = {
+        owners,
+        tone: "shared",
+        reasons: [
+          `${what} — 동마다 1명, ${owners}명`,
+          `땅을 ${sharers}명이 지분으로 나눠 가졌고 주건축물이 ${dongs}개 동이라, 동마다 주인이 따로인 것으로 봅니다${asOf}`,
+        ],
+      };
+    } else {
+      const many = b ? Math.max(b.households ?? 0, b.families ?? 0, b.hoCnt ?? 0) : 0;
+      base = {
+        owners: 1,
+        tone: "single",
+        reasons: [
+          `${what} — 1명`,
+          !land
+            ? "토지소유정보가 없어 한 소유로 봅니다"
+            : sharers > 1
+              ? `땅을 ${sharers}명이 공동명의로 가졌습니다 — 공동명의는 1명으로 셉니다${asOf}`
+              : `땅 소유자가 1명이고${many > 1 ? ` 대장의 ${many}가구·호도` : ""} 구분소유가 아니라 한 소유입니다${asOf}`,
+        ],
+      };
+    }
   }
 
   if (c) {

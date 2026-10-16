@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basemap } from "./MapView";
 import AdminLogin from "./AdminLogin";
 import ConsentSummary from "./ConsentSummary";
@@ -9,7 +9,7 @@ import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
 import SelectionSummary from "./SelectionSummary";
-import { OWNER_TONE_LEGEND } from "./ownerBadge";
+import OwnerLegend from "./OwnerLegend";
 import type { OwnerMark } from "./ownerBadge";
 import { blockConsent, computeBlocks, parcelAnchor } from "@/lib/blocks";
 import type { BlockConsent } from "@/lib/blocks";
@@ -153,30 +153,51 @@ export default function AppShell({
     [showBlocks, blocks, propsOf, consent],
   );
 
-  /** 필지 한가운데 자리. 지적도 모양에만 달려 있어 한 번만 구한다 */
-  const anchors = useMemo(() => {
-    if (!showOwners) return null;
-    const m = new Map<string, [number, number]>();
-    for (const f of parcels.features) m.set(f.properties.pnu, parcelAnchor(f));
+  /**
+   * 필지 한가운데 자리. 지적도 모양에만 달려 있어 한 번 구하면 기억해 둔다.
+   * 전 필지를 한꺼번에 구하면 큰 도로 필지 때문에 10초 넘게 화면이 멈추므로,
+   * 숫자를 띄울 구역 필지만 그때그때 구한다.
+   */
+  const anchorCache = useRef<{ parcels: ParcelCollection; map: Map<string, [number, number]> }>();
+  const featureOf = useMemo(() => {
+    const m = new Map<string, ParcelCollection["features"][number]>();
+    for (const f of parcels.features) m.set(f.properties.pnu, f);
     return m;
-  }, [showOwners, parcels]);
+  }, [parcels]);
+  const anchorOf = useCallback(
+    (pnu: string) => {
+      if (anchorCache.current?.parcels !== parcels) {
+        anchorCache.current = { parcels, map: new Map() };
+      }
+      const cache = anchorCache.current.map;
+      let a = cache.get(pnu);
+      if (!a) {
+        const f = featureOf.get(pnu);
+        if (!f) return undefined;
+        a = parcelAnchor(f);
+        cache.set(pnu, a);
+      }
+      return a;
+    },
+    [parcels, featureOf],
+  );
 
   /** 보이는 구역 필지마다 추정 소유자 수와 판별 원인 */
   const ownerMarks = useMemo<OwnerMark[] | null>(() => {
-    if (!showOwners || !anchors) return null;
+    if (!showOwners) return null;
     const marks: OwnerMark[] = [];
     for (const z of zones) {
       if (!visibleZoneIds.has(z.id)) continue;
       for (const pnu of z.parcels) {
         const props = propsOf.get(pnu);
         const basis = ownerBasisOf(pnu, propsOf, consent);
-        const anchor = anchors.get(pnu);
+        const anchor = anchorOf(pnu);
         if (!props || !basis || !anchor) continue;
         marks.push({ ...basis, pnu, jibun: props.jibun, anchor });
       }
     }
     return marks;
-  }, [showOwners, anchors, zones, visibleZoneIds, propsOf, consent]);
+  }, [showOwners, anchorOf, zones, visibleZoneIds, propsOf, consent]);
 
   const handleParcelClick = useCallback((props: ParcelProps, additive: boolean) => {
     setSelected((prev) => {
@@ -511,22 +532,6 @@ export default function AppShell({
             />
           )}
 
-          {/* 소유자 표시의 색 범례. 오른쪽 아래 필지 수 표시 바로 위에 둔다 */}
-          {ownerMarks && !drawing && (
-            <div className="pointer-events-none absolute bottom-12 right-4 z-[500] rounded-lg bg-slate-900/85 px-2.5 py-1.5 text-[10px] text-slate-400 backdrop-blur">
-              <div className="mb-1 text-slate-300">
-                추정 소유자 {ownerMarks.reduce((a, m) => a + m.owners, 0).toLocaleString()}명
-              </div>
-              <div className="flex flex-wrap gap-x-2 gap-y-1">
-                {OWNER_TONE_LEGEND.map((l) => (
-                  <span key={l.tone} className="flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
-                    {l.label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* 좁은 화면용 요약 열. 왼쪽 위는 확대·축소와 마법 선택 버튼이 쓰므로 오른쪽 위에 둔다.
               오른쪽 패널이 뜨는 넓은 화면에서는 같은 내용이 겹치므로 숨긴다 */}
@@ -535,6 +540,7 @@ export default function AppShell({
               drawing ? "hidden" : ""
             }`}
           >
+            {ownerMarks && <OwnerLegend marks={ownerMarks} compact />}
             <ConsentSummary
               zones={zones}
               consent={consent}
@@ -612,6 +618,9 @@ export default function AppShell({
               280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
               고른 게 있는 동안 궁금한 건 그 범위의 숫자지 구역 전체가 아니다.
             */}
+            {/* 소유자 표시의 범례·합계. 지도 오른쪽 아래는 이 열이 덮으므로 열 맨 위에 둔다 */}
+            {ownerMarks && <OwnerLegend marks={ownerMarks} />}
+
             {selected.size === 0 && (
               <ConsentSummary
                 zones={zones}

@@ -210,6 +210,8 @@ for (const f of parcels.features) {
 
   f.properties.building = {
     count: items.length,
+    /** 주건축물 동 수 (창고 같은 부속건축물 제외). 일반건축물 필지의 소유자 수 상한으로 쓴다 */
+    mainCount: items.filter((i) => i.mainAtchGbCdNm !== "부속건축물").length,
     shared: false,
     name: String(main.bldNm ?? "").trim() || null,
     usage: main.mainPurpsCdNm || null,

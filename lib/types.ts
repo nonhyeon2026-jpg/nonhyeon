@@ -1,6 +1,8 @@
 export type BuildingInfo = {
   /** 이 필지 위 건물 동 수 */
   count: number;
+  /** 그중 주건축물 동 수 (창고 같은 부속건축물 제외) */
+  mainCount?: number;
   /** 여러 필지에 걸친 건물을 공유하는 경우 연면적은 이 필지 몫이 아니다 */
   shared: boolean;
   name: string | null;
@@ -71,6 +73,11 @@ export type ParcelProps = {
    * VWorld 용도지역(LT_C_UQ111) 을 공간조인해 붙인다 (scripts/import-zoning.mjs)
    */
   zoning?: string | null;
+  /**
+   * 땅 소유자 (토지소유정보). 집합건축물이 아닌 필지(일반건축물·빈 땅)에만 붙는다.
+   * owners 가 2 이상이면 땅을 여럿이 지분으로 나눠 가진 것이다 (scripts/import-possession.mjs)
+   */
+  land?: { owners: number; corporate: number; asOf: string | null };
   /** 둘 이상의 용도지역에 걸친 필지의 면적 비율 (넓은 순, share 는 0~1) */
   zoningMix?: { name: string; share: number }[];
   /** [lat, lng] */

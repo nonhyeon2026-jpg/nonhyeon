@@ -16,13 +16,14 @@ export const ownerBadgeWidth = (owners: number) => 12 + 6.5 * String(owners).len
 
 /**
  * 성격별 바탕색. 블록 동의율(연두~초록)과 겹치지 않는 색으로 고른다.
- * 통건물은 파랑, 일부 묶음은 보라, 확인 필요는 주황으로 눈에 띄게 하고
+ * 통건물은 파랑, 일부 묶음은 보라, 확인 필요는 주황, 한 땅의 여러 동은 청록으로 눈에 띄게 하고
  * 호마다 따로·일반건축물처럼 흔한 것은 무채색으로 가라앉힌다.
  */
 const TONE_BG: Record<OwnerTone, string> = {
   whole: "#2563eb",
   grouped: "#7c3aed",
   check: "#d97706",
+  shared: "#0d9488",
   units: "#334155",
   single: "#475569",
   none: "#1e293b",
@@ -33,8 +34,10 @@ export const OWNER_TONE_LEGEND: { tone: OwnerTone; label: string; color: string 
   { tone: "whole", label: "통건물", color: TONE_BG.whole },
   { tone: "grouped", label: "일부 묶음", color: TONE_BG.grouped },
   { tone: "check", label: "확인 필요", color: TONE_BG.check },
+  { tone: "shared", label: "여러 동", color: TONE_BG.shared },
   { tone: "units", label: "호마다", color: TONE_BG.units },
   { tone: "single", label: "1명", color: TONE_BG.single },
+  { tone: "none", label: "다른 지번에서 셈", color: TONE_BG.none },
 ];
 
 /**
