@@ -120,21 +120,40 @@ export type OwnerBasis = {
 /**
  * 지번 하나의 추정 소유자와 판별 원인. 딸림 지번은 대표 지번에서 세므로 0명이다 —
  * summarizeZone 처럼 건물 하나를 한 번만 세야 지도 숫자를 더한 값이 카드 숫자와 맞는다.
- * (대표 지번이 범위 밖이고 딸림만 안에 있으면 카드는 딸림 쪽에서 세므로 그때만 어긋난다)
+ *
+ * 대표 지번이 범위(scope, 보통 그 구역의 필지) 밖이고 딸림 지번만 안에 있으면
+ * (현대연립: 대장은 도로 필지 176-4 에 있고 땅은 176-5·176-10) 범위 안의 첫 딸림 지번이
+ * 그 건물을 대신 센다. summarizeZone 도 이때는 딸림 쪽에서 세므로 합계가 맞는다.
  */
 export function ownerBasisOf(
   pnu: string,
   propsOf: Map<string, ParcelProps>,
   consent: ConsentMap,
+  scope?: Set<string>,
 ): OwnerBasis | null {
   const props = propsOf.get(pnu);
   if (!props) return null;
   const c = consent[pnu];
   if (isSharedInto(pnu, c)) {
+    const stand = scope && !scope.has(c.pnu) && (c.sharedPnus ?? []).find((p) => scope.has(p));
+    if (stand === pnu) {
+      const main = ownerBasis(propsOf.get(c.pnu) ?? props, c);
+      return {
+        ...main,
+        reasons: [
+          ...main.reasons,
+          `대표 지번 논현동 ${c.jibun}가 구역 밖이라 한 건물인 이 지번에서 셉니다`,
+        ],
+      };
+    }
     return {
       owners: 0,
       tone: "none",
-      reasons: [`논현동 ${c.jibun}와 한 건물 — 그쪽에서 셉니다`],
+      reasons: [
+        stand
+          ? `논현동 ${c.jibun}와 한 건물 — 같은 건물의 다른 딸림 지번에서 셉니다`
+          : `논현동 ${c.jibun}와 한 건물 — 그쪽에서 셉니다`,
+      ],
     };
   }
   return ownerBasis(props, c);

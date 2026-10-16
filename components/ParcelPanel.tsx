@@ -498,7 +498,7 @@ export default function ParcelPanel({
                     pnuOfJibun={pnuOfJibun}
                     jibunOfPnu={jibunOfPnu}
                   />
-                  <OwnerReason pnu={p.pnu} propsOf={propsOf} consent={consent} />
+                  <OwnerReason pnu={p.pnu} propsOf={propsOf} consent={consent} zone={z} />
                   <div className="mt-1 text-[10px] text-slate-600">PNU {p.pnu}</div>
                 </li>
               );

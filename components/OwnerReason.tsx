@@ -2,7 +2,7 @@
 
 import { ownerBasisOf } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
-import type { ParcelProps } from "@/lib/types";
+import type { ParcelProps, Zone } from "@/lib/types";
 import { OWNER_TONE_LEGEND } from "./ownerBadge";
 
 /**
@@ -13,12 +13,16 @@ export default function OwnerReason({
   pnu,
   propsOf,
   consent,
+  zone,
 }: {
   pnu: string;
   propsOf: Map<string, ParcelProps>;
   consent: ConsentMap;
+  /** 이 필지가 속한 구역 — 지도 숫자와 같은 범위로 센다 */
+  zone?: Zone;
 }) {
-  const basis = ownerBasisOf(pnu, propsOf, consent);
+  const scope = zone ? new Set(zone.parcels) : undefined;
+  const basis = ownerBasisOf(pnu, propsOf, consent, scope);
   if (!basis) return null;
   const color = OWNER_TONE_LEGEND.find((l) => l.tone === basis.tone)?.color ?? "#475569";
   const [head, ...rest] = basis.reasons;

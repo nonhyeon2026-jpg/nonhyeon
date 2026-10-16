@@ -188,9 +188,11 @@ export default function AppShell({
     const marks: OwnerMark[] = [];
     for (const z of zones) {
       if (!visibleZoneIds.has(z.id)) continue;
+      // 구역 카드(summarizeZone)와 같은 범위로 세야 지도 합계가 카드와 맞는다
+      const scope = new Set(z.parcels);
       for (const pnu of z.parcels) {
         const props = propsOf.get(pnu);
-        const basis = ownerBasisOf(pnu, propsOf, consent);
+        const basis = ownerBasisOf(pnu, propsOf, consent, scope);
         const anchor = anchorOf(pnu);
         if (!props || !basis || !anchor) continue;
         marks.push({ ...basis, pnu, jibun: props.jibun, anchor });

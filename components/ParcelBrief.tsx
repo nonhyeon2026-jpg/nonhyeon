@@ -125,7 +125,14 @@ export default function ParcelBrief({
         ) : (
           <div className="mt-1.5 text-[11px] text-slate-500">참여의향서 제출 없음</div>
         ))}
-      {only && <OwnerReason pnu={only.pnu} propsOf={propsOf} consent={consent} />}
+      {only && (
+        <OwnerReason
+          pnu={only.pnu}
+          propsOf={propsOf}
+          consent={consent}
+          zone={zoneOf.get(only.pnu)}
+        />
+      )}
       {!only && s.total > 0 && (
         <div className="mt-1.5 flex items-center gap-2">
           <span className="text-[11px] text-slate-400">참여의향서</span>

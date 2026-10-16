@@ -35,8 +35,8 @@ export const OWNER_TONE_LEGEND: { tone: OwnerTone; label: string; color: string 
   { tone: "grouped", label: "일부 묶음", color: TONE_BG.grouped },
   { tone: "check", label: "확인 필요", color: TONE_BG.check },
   { tone: "shared", label: "여러 동", color: TONE_BG.shared },
-  { tone: "units", label: "호마다", color: TONE_BG.units },
-  { tone: "single", label: "1명", color: TONE_BG.single },
+  { tone: "units", label: "집합건물", color: TONE_BG.units },
+  { tone: "single", label: "단독·다가구·근생", color: TONE_BG.single },
   { tone: "none", label: "다른 지번에서 셈", color: TONE_BG.none },
 ];
 
