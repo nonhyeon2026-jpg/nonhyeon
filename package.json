@@ -18,7 +18,8 @@
     "migrate:zones": "node scripts/migrate-zones-mongo.mjs",
     "seed:admin": "node scripts/seed-admin-mongo.mjs",
     "link:consent": "node scripts/link-consent.mjs",
-    "import:zoning": "node scripts/import-zoning.mjs"
+    "import:zoning": "node scripts/import-zoning.mjs",
+    "import:possession": "node scripts/import-possession.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

@@ -192,6 +192,22 @@ for (const f of parcels.features) {
   const ho = items.reduce((s, i) => s + num(i.hoCnt), 0);
   const housingType = housingTypeOf(main.mainPurpsCdNm, main.etcPurps);
 
+  /*
+   * 구분소유 호수. 집합건축물(다세대·연립·아파트·집합 근생)만 호마다 소유자가 따로 있다.
+   * 일반건축물은 다가구처럼 가구가 여럿이어도 건물 전체가 한 소유라 여기에 넣지 않는다.
+   *
+   * 집합 공동주택 표제부의 세대수는 주거 호, 호수는 그 밖(1층 근생 등) 호라서 대개 따로 센다
+   * (예: 세대 12 · 호 1 → 13호). 호수가 세대수 이상이면 겹쳐 적은 것으로 보고 큰 쪽만 쓴다.
+   * 둘 다 0 이면 1호로 본다.
+   */
+  const collective = items
+    .filter((i) => i.regstrGbCdNm === "집합")
+    .reduce((s, i) => {
+      const ho = num(i.hoCnt);
+      const hh = num(i.hhldCnt);
+      return s + ((ho && ho < hh ? hh + ho : Math.max(ho, hh)) || 1);
+    }, 0);
+
   f.properties.building = {
     count: items.length,
     shared: false,
@@ -204,6 +220,8 @@ for (const f of parcels.features) {
     households: hhld,
     families: fmly,
     hoCnt: ho,
+    /** 구분소유 호수 (집합건축물). 일반건축물뿐이면 0 — 소유자 1명 */
+    collective,
     floors: Math.max(...items.map((i) => num(i.grndFlrCnt))),
     basement: Math.max(...items.map((i) => num(i.ugrndFlrCnt))),
     totalArea: Math.round(items.reduce((s, i) => s + num(i.totArea), 0)),

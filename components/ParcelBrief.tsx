@@ -4,6 +4,7 @@ import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
+import OwnerReason from "./OwnerReason";
 
 /**
  * 주택 유형 한 글자 표시. 현장에서 가장 자주 가르는 세 유형만 둔다.
@@ -83,8 +84,8 @@ export default function ParcelBrief({
         )}
       </div>
 
-      {only ? (
-        c ? (
+      {only &&
+        (c ? (
           <>
             <div className="mt-1.5 flex items-center gap-2">
               <span className="text-[11px] text-slate-400">참여의향서</span>
@@ -123,17 +124,16 @@ export default function ParcelBrief({
           </>
         ) : (
           <div className="mt-1.5 text-[11px] text-slate-500">참여의향서 제출 없음</div>
-        )
-      ) : (
-        s.total > 0 && (
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="text-[11px] text-slate-400">참여의향서</span>
-            <span className="text-sm font-semibold" style={{ color: consentColor(s.ratio) }}>
-              {s.submitted}/{s.total}호
-            </span>
-            <span className="text-[11px] text-slate-500">{s.ratio}%</span>
-          </div>
-        )
+        ))}
+      {only && <OwnerReason pnu={only.pnu} propsOf={propsOf} consent={consent} />}
+      {!only && s.total > 0 && (
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="text-[11px] text-slate-400">참여의향서</span>
+          <span className="text-sm font-semibold" style={{ color: consentColor(s.ratio) }}>
+            {s.submitted}/{s.total}호
+          </span>
+          <span className="text-[11px] text-slate-500">{s.ratio}%</span>
+        </div>
       )}
     </div>
   );

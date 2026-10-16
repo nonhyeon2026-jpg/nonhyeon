@@ -12,6 +12,8 @@ import type { ConsentMap } from "@/lib/consent";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
 import { blockBadgeHtml, BLOCK_BADGE_H, BLOCK_BADGE_W } from "./blockBadge";
+import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
+import type { OwnerMark } from "./ownerBadge";
 import type { ParcelCollection, ParcelFeature, ParcelProps, Zone } from "@/lib/types";
 
 /* 네이버 지도 JS API v3 는 타입 패키지가 없으므로 최소한으로만 선언한다 */
@@ -35,6 +37,12 @@ const SELECTED_FILL = "#22c55e";
  * "줌이 낮아서 아무것도 안 보이는" 상태가 되면 클릭할 대상 자체가 사라진다.
  */
 const MAX_UNZONED_ON_SCREEN = 1200;
+
+/**
+ * 소유자 수 표시를 띄우는 최소 배율. 필지마다 하나씩이라 이보다 멀리서는 서로 겹쳐
+ * 읽을 수 없다 — 블록 표시와 달리 화면 안에 든 것만 올린다.
+ */
+const OWNER_MIN_ZOOM = 17;
 
 /** 내 위치 표시 색 */
 const MY_LOCATION_COLOR = "#2563eb";
@@ -90,10 +98,12 @@ export default function NaverMapView({
   visibleZoneIds,
   selected,
   blocks,
+  owners,
   showCadastral,
   flyTo,
   onParcelClick,
   onBlockClick,
+  onOwnerClick,
   onLassoSelect,
   onLassoModeChange,
   onNotice,
@@ -108,11 +118,15 @@ export default function NaverMapView({
   selected: Set<string>;
   /** 블록별 면적 동의율. null 이면 표시를 그리지 않는다 */
   blocks: BlockConsent[] | null;
+  /** 필지별 추정 소유자 수. null 이면 표시를 그리지 않는다 */
+  owners: OwnerMark[] | null;
   showCadastral: boolean;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
   /** 블록 표시를 누르면 그 블록 필지를 고른다 */
   onBlockClick: (block: BlockConsent) => void;
+  /** 소유자 수 표시를 누르면 그 필지를 고르고 판별 원인을 보여준다 */
+  onOwnerClick: (mark: OwnerMark) => void;
   /** 영역을 그려 고른 필지들 (마법 선택) */
   onLassoSelect: (pnus: string[], additive: boolean) => void;
   /** 영역을 찍는 중인지 — 그동안은 지도를 덮는 다른 카드를 치운다 */
@@ -135,6 +149,12 @@ export default function NaverMapView({
   blockClickRef.current = onBlockClick;
   /** 블록 동의율 표시 */
   const blockMarkersRef = useRef<any[]>([]);
+  const ownerClickRef = useRef(onOwnerClick);
+  ownerClickRef.current = onOwnerClick;
+  /** pnu → 소유자 수 표시. 화면에 들어올 때만 지도에 붙인다 */
+  const ownerMarkersRef = useRef<Map<string, { marker: any; mark: OwnerMark }>>(new Map());
+  /** 배율이 낮아 소유자 수 표시를 감춘 상태 */
+  const [ownersTooFar, setOwnersTooFar] = useState(false);
 
   const [ready, setReady] = useState(false);
   /** 지도 init 이벤트가 지났는지 — 네이버 지도는 컨트롤을 이 뒤에 만들어야 붙는다 */
@@ -486,6 +506,51 @@ export default function NaverMapView({
       blockMarkersRef.current = [];
     };
   }, [ready, blocks]);
+
+  /*
+   * 소유자 수 표시. 구역 필지마다 하나라 수백 개다. 마커는 목록이 바뀔 때 한 번 만들고,
+   * 지도가 멈출 때마다 화면 안에 든 것만 붙인다 (폴리곤과 같은 방식).
+   */
+  useEffect(() => {
+    if (!ready) return;
+    const naver = window.naver;
+    const made = ownerMarkersRef.current;
+    for (const { marker } of made.values()) marker.setMap(null);
+    made.clear();
+    for (const mark of owners ?? []) {
+      const w = ownerBadgeWidth(mark.owners);
+      const marker = new naver.maps.Marker({
+        position: new naver.maps.LatLng(mark.anchor[0], shiftLng(mark.anchor[1])),
+        title: `논현동 ${mark.jibun} · 추정 소유자 ${mark.owners}명`,
+        zIndex: 150000,
+        icon: {
+          content: ownerBadgeHtml(mark.owners, mark.tone),
+          anchor: new naver.maps.Point(w / 2, OWNER_BADGE_H / 2),
+        },
+      });
+      naver.maps.Event.addListener(marker, "click", () => ownerClickRef.current(mark));
+      made.set(mark.pnu, { marker, mark });
+    }
+    return () => {
+      for (const { marker } of made.values()) marker.setMap(null);
+      made.clear();
+    };
+  }, [ready, owners]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const map = mapRef.current;
+    const made = ownerMarkersRef.current;
+    const far = map.getZoom() < OWNER_MIN_ZOOM;
+    setOwnersTooFar(Boolean(owners?.length) && far);
+    const bounds = map.getBounds();
+    for (const { marker, mark } of made.values()) {
+      const show =
+        !far && bounds.hasLatLng(new window.naver.maps.LatLng(mark.anchor[0], shiftLng(mark.anchor[1])));
+      if (show && !marker.getMap()) marker.setMap(map);
+      else if (!show && marker.getMap()) marker.setMap(null);
+    }
+  }, [ready, owners, viewTick]);
 
   /* 컴포넌트가 사라질 때 정리 */
   useEffect(
@@ -980,6 +1045,9 @@ export default function NaverMapView({
       {ready && (
         <div className="pointer-events-none absolute bottom-4 right-4 z-[500] rounded-lg bg-slate-900/80 px-2.5 py-1 text-[11px] text-slate-400 backdrop-blur">
           화면에 {drawn.toLocaleString()}필지
+          {ownersTooFar && (
+            <span className="text-amber-400"> · 확대하면 지번별 소유자 수가 보입니다</span>
+          )}
           {skipped > 0 && (
             <span className="text-amber-400">
               {" "}

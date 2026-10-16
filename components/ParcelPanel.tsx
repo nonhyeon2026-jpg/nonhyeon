@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import ConsentEditor from "./ConsentEditor";
+import OwnerReason from "./OwnerReason";
 import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ConsentInput, ParcelCollection, ParcelProps, Zone } from "@/lib/types";
@@ -497,6 +498,7 @@ export default function ParcelPanel({
                     pnuOfJibun={pnuOfJibun}
                     jibunOfPnu={jibunOfPnu}
                   />
+                  <OwnerReason pnu={p.pnu} propsOf={propsOf} consent={consent} />
                   <div className="mt-1 text-[10px] text-slate-600">PNU {p.pnu}</div>
                 </li>
               );

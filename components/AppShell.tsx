@@ -9,9 +9,11 @@ import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
 import SelectionSummary from "./SelectionSummary";
-import { blockConsent, computeBlocks } from "@/lib/blocks";
+import { OWNER_TONE_LEGEND } from "./ownerBadge";
+import type { OwnerMark } from "./ownerBadge";
+import { blockConsent, computeBlocks, parcelAnchor } from "@/lib/blocks";
 import type { BlockConsent } from "@/lib/blocks";
-import { applyConsent, removeConsent as dropConsent } from "@/lib/consent";
+import { applyConsent, removeConsent as dropConsent, ownerBasisOf } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type {
   ConsentInfo,
@@ -69,8 +71,14 @@ export default function AppShell({
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
-  /** 블록(도로로 둘러싸인 필지 덩어리)마다 면적 동의율 표시를 띄운다 */
-  const [showBlocks, setShowBlocks] = useState(false);
+  /**
+   * 지도에 얹는 숫자 표시. 블록별(면적 동의율)과 소유자(지번별 추정 소유자 수)는 둘 다
+   * 필지 위에 숫자를 띄워 겹치면 읽을 수 없으므로 하나만 켠다.
+   */
+  const [overlay, setOverlay] = useState<"none" | "blocks" | "owners">("none");
+  const showBlocks = overlay === "blocks";
+  const showOwners = overlay === "owners";
+  const toggleOverlay = (o: "blocks" | "owners") => setOverlay((v) => (v === o ? "none" : o));
   const [showCadastral, setShowCadastral] = useState(false);
   const [basemap, setBasemap] = useState<Basemap>("dark");
   const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
@@ -145,6 +153,31 @@ export default function AppShell({
     [showBlocks, blocks, propsOf, consent],
   );
 
+  /** 필지 한가운데 자리. 지적도 모양에만 달려 있어 한 번만 구한다 */
+  const anchors = useMemo(() => {
+    if (!showOwners) return null;
+    const m = new Map<string, [number, number]>();
+    for (const f of parcels.features) m.set(f.properties.pnu, parcelAnchor(f));
+    return m;
+  }, [showOwners, parcels]);
+
+  /** 보이는 구역 필지마다 추정 소유자 수와 판별 원인 */
+  const ownerMarks = useMemo<OwnerMark[] | null>(() => {
+    if (!showOwners || !anchors) return null;
+    const marks: OwnerMark[] = [];
+    for (const z of zones) {
+      if (!visibleZoneIds.has(z.id)) continue;
+      for (const pnu of z.parcels) {
+        const props = propsOf.get(pnu);
+        const basis = ownerBasisOf(pnu, propsOf, consent);
+        const anchor = anchors.get(pnu);
+        if (!props || !basis || !anchor) continue;
+        marks.push({ ...basis, pnu, jibun: props.jibun, anchor });
+      }
+    }
+    return marks;
+  }, [showOwners, anchors, zones, visibleZoneIds, propsOf, consent]);
+
   const handleParcelClick = useCallback((props: ParcelProps, additive: boolean) => {
     setSelected((prev) => {
       const next = additive ? new Set(prev) : new Set<string>();
@@ -190,6 +223,16 @@ export default function AppShell({
         `블록 ${block.pnus.length}필지 · ${block.people}명 제출 · 면적 동의율 ${block.areaRatio}% ` +
           `(${Math.round(block.consentedArea).toLocaleString()}/${Math.round(block.area).toLocaleString()}㎡)`,
       );
+    },
+    [flash],
+  );
+
+  /** 소유자 수 표시를 누르면 그 필지를 고른다 — 판별 원인은 필지 카드에 자세히 나온다 */
+  const handleOwnerClick = useCallback(
+    (mark: OwnerMark) => {
+      setSelected(new Set([mark.pnu]));
+      setFlyTo(null);
+      flash(`논현동 ${mark.jibun} · 추정 소유자 ${mark.owners}명 — ${mark.reasons[0]}`);
     },
     [flash],
   );
@@ -373,7 +416,7 @@ export default function AppShell({
           )}
 
           <button
-            onClick={() => setShowBlocks((v) => !v)}
+            onClick={() => toggleOverlay("blocks")}
             aria-pressed={showBlocks}
             title="도로로 나뉜 블록마다 면적 동의율을 지도에 표시합니다"
             className={`rounded-lg px-3 py-1.5 text-xs transition ${
@@ -383,6 +426,19 @@ export default function AppShell({
             }`}
           >
             블록별
+          </button>
+
+          <button
+            onClick={() => toggleOverlay("owners")}
+            aria-pressed={showOwners}
+            title="구역 지번마다 추정 소유자 수를 지도에 표시합니다. 숫자를 누르면 판별 원인이 나옵니다"
+            className={`rounded-lg px-3 py-1.5 text-xs transition ${
+              showOwners
+                ? "bg-blue-600 text-white"
+                : "border border-slate-700 text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            소유자
           </button>
 
           <button
@@ -426,10 +482,12 @@ export default function AppShell({
               visibleZoneIds={visibleZoneIds}
               selected={selected}
               blocks={blockRatios}
+              owners={ownerMarks}
               showCadastral={showCadastral}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
               onBlockClick={handleBlockClick}
+              onOwnerClick={handleOwnerClick}
               onLassoSelect={handleLassoSelect}
               onLassoModeChange={setDrawing}
               onNotice={flash}
@@ -444,11 +502,30 @@ export default function AppShell({
               visibleZoneIds={visibleZoneIds}
               selected={selected}
               blocks={blockRatios}
+              owners={ownerMarks}
               basemap={basemap}
               flyTo={flyTo}
               onParcelClick={handleParcelClick}
               onBlockClick={handleBlockClick}
+              onOwnerClick={handleOwnerClick}
             />
+          )}
+
+          {/* 소유자 표시의 색 범례. 오른쪽 아래 필지 수 표시 바로 위에 둔다 */}
+          {ownerMarks && !drawing && (
+            <div className="pointer-events-none absolute bottom-12 right-4 z-[500] rounded-lg bg-slate-900/85 px-2.5 py-1.5 text-[10px] text-slate-400 backdrop-blur">
+              <div className="mb-1 text-slate-300">
+                추정 소유자 {ownerMarks.reduce((a, m) => a + m.owners, 0).toLocaleString()}명
+              </div>
+              <div className="flex flex-wrap gap-x-2 gap-y-1">
+                {OWNER_TONE_LEGEND.map((l) => (
+                  <span key={l.tone} className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: l.color }} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* 좁은 화면용 요약 열. 왼쪽 위는 확대·축소와 마법 선택 버튼이 쓰므로 오른쪽 위에 둔다.

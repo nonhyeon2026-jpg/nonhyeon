@@ -50,6 +50,9 @@ export function removeConsent(map: ConsentMap, pnu: string): ConsentMap {
   return expandShared(Object.values(map).filter((d) => d.pnu !== pnu));
 }
 
+/** 정수 백분율. 분모가 0 이면 0 */
+export const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : 0);
+
 export type ConsentSummary = {
   /** 명부에 한 호라도 올라온 필지 수 */
   parcels: number;
@@ -70,14 +73,177 @@ export function parcelUnits(props: ParcelProps): number {
   return Math.max(b.households ?? 0, b.families ?? 0, b.hoCnt ?? 0) || 1;
 }
 
+/**
+ * 토지소유정보로 보아 한 사람이 건물을 통째로 가진 필지인지 (명부의 통건물 제출과 같은 뜻).
+ * 명부에 호를 나눠 적었어도(172-5 등) 낸 사람은 그 한 명이다.
+ */
+const ownedWhole = (props?: ParcelProps) => props?.building?.owners?.pattern === "whole";
+
+/**
+ * 명부 한 건에서 참여의향서를 낸 사람 수.
+ * 통건물 제출, 또는 토지소유정보상 통건물인 필지는 소유자 한 명이 낸 것이라 1명이다.
+ * 그 밖에는 호마다 한 명으로 센다 — 호 목록이 없으면 입력된 제출 호수를 쓴다.
+ */
+export const submitters = (c: ConsentInfo, props?: ParcelProps) =>
+  c.wholeBuilding ? 1 : ownedWhole(props) ? Math.min(1, c.submitted) : c.submitted;
+
+/**
+ * 필지의 추정 소유자 수 (토지등소유자).
+ *
+ * 호수가 곧 소유자 수인 것은 집합건축물(다세대·연립·아파트)뿐이다. 다가구·단독·근생 같은
+ * 일반건축물은 가구가 여럿이어도 건물 전체가 한 소유라 1명이다. 대장이 없는 땅도 1명.
+ *
+ * 집합건축물은 토지소유정보로 어림한 값(building.owners)이 있으면 그것을 쓴다 — 같은 날
+ * 보존등기한 채 남은 호들처럼 한 사람이 여러 호를 가진 것을 묶은 값이다. 없으면 대장 호수.
+ * 명부에 통건물 제출("-")로 올라와 있으면 한 사람이 다 가진 것이라 1명이다.
+ * 명부에 제출한 사람이 추정보다 많으면 그쪽을 따른다 — 낸 사람보다 소유자가 적을 수는 없다.
+ */
+export function parcelOwners(props: ParcelProps, c?: ConsentInfo): number {
+  return ownerBasis(props, c).owners;
+}
+
+/**
+ * 추정 소유자 수의 성격. 지도 표시의 색을 가른다.
+ * whole: 한 사람이 건물을 다 가짐 · grouped: 일부 호를 한 사람이 여럿 가짐 ·
+ * units: 호마다 따로 · single: 일반건축물·땅이라 1명 · check: 공동건축주 의심 · none: 따로 세지 않음
+ */
+export type OwnerTone = "whole" | "grouped" | "units" | "single" | "check" | "none";
+
+export type OwnerBasis = {
+  owners: number;
+  tone: OwnerTone;
+  /** 판별 원인. 첫 줄이 결론이고 아래로 근거가 붙는다 */
+  reasons: string[];
+};
+
+/**
+ * 지번 하나의 추정 소유자와 판별 원인. 딸림 지번은 대표 지번에서 세므로 0명이다 —
+ * summarizeZone 처럼 건물 하나를 한 번만 세야 지도 숫자를 더한 값이 카드 숫자와 맞는다.
+ * (대표 지번이 범위 밖이고 딸림만 안에 있으면 카드는 딸림 쪽에서 세므로 그때만 어긋난다)
+ */
+export function ownerBasisOf(
+  pnu: string,
+  propsOf: Map<string, ParcelProps>,
+  consent: ConsentMap,
+): OwnerBasis | null {
+  const props = propsOf.get(pnu);
+  if (!props) return null;
+  const c = consent[pnu];
+  if (isSharedInto(pnu, c)) {
+    return {
+      owners: 0,
+      tone: "none",
+      reasons: [`논현동 ${c.jibun}와 한 건물 — 그쪽에서 셉니다`],
+    };
+  }
+  return ownerBasis(props, c);
+}
+
+/** 판별 원인까지 붙인 parcelOwners. 숫자와 설명이 어긋나지 않도록 계산은 여기 하나만 둔다 */
+export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
+  const b = props.building;
+  if (c?.wholeBuilding) {
+    return { owners: 1, tone: "whole", reasons: ["명부에 통건물 제출(-)로 올라온 필지 — 1명"] };
+  }
+
+  let base: OwnerBasis;
+  const o = b?.owners;
+  if (o?.sameAs) {
+    base = {
+      owners: 0,
+      tone: "none",
+      reasons: [`논현동 ${o.sameAs}와 같은 건물 — 그쪽에서 셉니다`],
+    };
+  } else if (o) {
+    const asOf = o.asOf ? ` (토지소유정보 ${o.asOf} 기준)` : " (토지소유정보)";
+    if (o.pattern === "whole") {
+      base = {
+        owners: 1,
+        tone: "whole",
+        reasons: [
+          `통건물 — ${o.units}호를 한 사람이 가진 것으로 봅니다`,
+          `전 호의 소유권 변동이 같은 날 같은 원인입니다. 지은 채 안 팔았거나 건물째 샀습니다${asOf}`,
+        ],
+      };
+    } else if (o.pattern === "partial") {
+      base = {
+        owners: o.owners,
+        tone: "grouped",
+        reasons: [
+          `${o.units}호 → ${o.owners}명`,
+          `${o.grouped}호는 같은 날 보존등기한 채 남았거나 같은 날 주소·이름을 고친 기록이 같아 한 사람씩 묶었습니다${asOf}`,
+        ],
+      };
+    } else {
+      base = {
+        owners: o.owners,
+        tone: "units",
+        reasons: [
+          `${o.units}호 → ${o.owners}명`,
+          `호마다 소유권 변동 날짜가 달라 호마다 1명으로 셉니다${asOf}`,
+        ],
+      };
+    }
+    if (o.check) {
+      base.tone = "check";
+      base.reasons.push(
+        "같은 날 기록인데 거주지 구분이 갈립니다 — 공동건축주가 나눠 가졌을 수 있어 정부24 건축물대장 열람으로 확인이 필요합니다",
+      );
+    }
+  } else if (b?.collective) {
+    base = {
+      owners: b.collective,
+      tone: "units",
+      reasons: [
+        `집합건축물 ${b.collective}호 → 호마다 1명`,
+        "토지소유정보에 호별 기록이 없어(대지권 미등기 등) 건축물대장 호수를 그대로 씁니다",
+      ],
+    };
+  } else if (b) {
+    const kind = b.housingType ?? b.usage ?? "일반건축물";
+    const many = Math.max(b.households ?? 0, b.families ?? 0, b.hoCnt ?? 0);
+    base = {
+      owners: 1,
+      tone: "single",
+      reasons: [
+        `일반건축물(${kind}) — 1명`,
+        many > 1
+          ? `대장에 ${many}가구·호가 있지만 구분소유가 아니라 건물 전체가 한 소유입니다`
+          : "구분소유가 아닌 건물이라 한 소유입니다",
+      ],
+    };
+  } else {
+    base = { owners: 1, tone: "single", reasons: ["건물 없는 땅 — 토지 소유자 1명"] };
+  }
+
+  if (c) {
+    const people = submitters(c, props);
+    if (people > base.owners) {
+      return {
+        owners: people,
+        tone: base.tone === "none" ? "units" : base.tone,
+        reasons: [
+          `명부 제출 ${people}명 — 추정(${base.owners}명)보다 많아 제출 인원을 따릅니다`,
+          ...base.reasons,
+        ],
+      };
+    }
+  }
+  return base;
+}
+
 export type ZoneConsentSummary = ConsentSummary & {
   /** 구역에 편입된 필지 수 */
   zoneParcels: number;
   /** 그중 명부에 한 호라도 올라온 필지 수 */
   submittedParcels: number;
-  /** 제출률의 분모로 쓴 총 소유자 수 (구역에 설정된 값) */
+  /** 참여의향서를 낸 사람 수 (submitters 규칙) */
+  people: number;
+  /** 건축물대장·명부로 추정한 소유자 수 (parcelOwners 합계) */
+  estimatedOwners: number;
+  /** 직접 넣은 총 소유자 수. 없으면 null — 그때는 estimatedOwners 를 분모로 쓴다 */
   owners: number | null;
-  /** 소유자 수 기준 제출률(%). owners 가 없으면 호수 기준 ratio 와 같다 */
+  /** 소유자 수 기준 제출률(%) = people / (owners ?? estimatedOwners) */
   ownerRatio: number;
   /** 구역에 편입된 필지의 면적 합계 (㎡) */
   area: number;
@@ -102,6 +268,8 @@ export function summarizeZone(
 ): ZoneConsentSummary {
   let submitted = 0;
   let total = 0;
+  let people = 0;
+  let estimatedOwners = 0;
   let submittedParcels = 0;
   let zoneParcels = 0;
   let area = 0;
@@ -131,15 +299,21 @@ export function summarizeZone(
       counted.add(c.pnu);
       submitted += c.submitted;
       total += c.total;
+      // 딸림 지번이면 건물이 대장에 등재된 대표 지번 쪽 정보로 센다
+      const main = propsOf.get(c.pnu) ?? props;
+      people += submitters(c, main);
+      estimatedOwners += parcelOwners(main, c);
       submittedParcels += 1;
     } else {
       total += parcelUnits(props);
+      estimatedOwners += parcelOwners(props);
     }
   }
 
-  const ratio = total ? Math.round((submitted / total) * 100) : 0;
-  // 한 사람이 여러 호를 가진 경우가 있어, 소유자 수가 설정돼 있으면 그쪽을 분모로 쓴다
+  const ratio = pct(submitted, total);
+  // 직접 넣은 소유자 수가 있으면 그쪽이 추정보다 정확하다
   const usable = owners && owners > 0 ? owners : null;
+  const denom = usable ?? estimatedOwners;
 
   return {
     parcels: submittedParcels,
@@ -148,8 +322,10 @@ export function summarizeZone(
     submitted,
     total,
     ratio,
+    people,
+    estimatedOwners,
     owners: usable,
-    ownerRatio: usable ? Math.round((submitted / usable) * 100) : ratio,
+    ownerRatio: pct(people, denom),
     area,
     consentedArea,
     // 면적 요건은 1/2 처럼 경계가 딱 정해져 있어, 49.6% 가 50% 로 보이면 안 된다

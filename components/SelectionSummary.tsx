@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { consentColor, summarizeZone } from "@/lib/consent";
+import { consentColor, pct, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps } from "@/lib/types";
 
@@ -29,7 +29,7 @@ export default function SelectionSummary({
   selected: Set<string>;
   propsOf: Map<string, ParcelProps>;
   consent: ConsentMap;
-  /** 제출률의 분모로 쓸 소유자 수. 비어 있으면 호수 합계를 쓴다 */
+  /** 제출률의 분모로 쓸 소유자 수. 비어 있으면 추정 소유자 수를 쓴다 */
   owners: string;
   onOwnersChange: (v: string) => void;
   /** 좁은 화면용 — 두 비율만 한 줄로 */
@@ -88,16 +88,19 @@ export default function SelectionSummary({
       </div>
 
       <div className="mt-2 text-[11px] text-slate-300">
-        총 {(s.owners ?? s.total).toLocaleString()}
-        {s.owners ? "명" : "호"} 중{" "}
+        {s.owners ? "총" : "추정"} 소유자 {(s.owners ?? s.estimatedOwners).toLocaleString()}명 중{" "}
         <span className="font-semibold" style={{ color }}>
-          {s.submitted.toLocaleString()}호
+          {s.people.toLocaleString()}명
         </span>{" "}
         제출
       </div>
       <div className="mt-0.5 text-[11px] text-slate-500">
         {s.submittedParcels.toLocaleString()}개 필지에서 제출
-        {s.owners !== null && <> · 호수 합계 {s.total.toLocaleString()}호 기준 {s.ratio}%</>}
+        {s.owners !== null && (
+          <> · 추정 {s.estimatedOwners.toLocaleString()}명 기준 {pct(s.people, s.estimatedOwners)}%</>
+        )}
+        <br />
+        호수 기준 {s.total.toLocaleString()}호 중 {s.submitted.toLocaleString()}호 ({s.ratio}%)
       </div>
 
       <div className="mt-2.5 border-t border-slate-800 pt-2">
@@ -126,13 +129,13 @@ export default function SelectionSummary({
 
       <div className="mt-2.5 border-t border-slate-800 pt-2.5">
         <label className="block text-[10px] text-slate-400">
-          소유자 수 (비우면 호수 합계 {s.total.toLocaleString()}호)
+          소유자 수 (비우면 추정 {s.estimatedOwners.toLocaleString()}명)
         </label>
         <input
           type="number"
           min={1}
           value={owners}
-          placeholder={String(s.total)}
+          placeholder={String(s.estimatedOwners)}
           onChange={(e) => onOwnersChange(e.target.value)}
           className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs outline-none focus:border-emerald-500"
         />

@@ -6,6 +6,8 @@ import { divIcon } from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import type { BlockConsent } from "@/lib/blocks";
 import { blockBadgeHtml, BLOCK_BADGE_H, BLOCK_BADGE_W } from "./blockBadge";
+import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
+import type { OwnerMark } from "./ownerBadge";
 import {
   consentColor,
   consentFillOpacity,
@@ -59,10 +61,12 @@ export default function MapView({
   visibleZoneIds,
   selected,
   blocks,
+  owners,
   basemap,
   flyTo,
   onParcelClick,
   onBlockClick,
+  onOwnerClick,
 }: {
   parcels: ParcelCollection;
   boundary: { geometry: { coordinates: number[][][] } };
@@ -73,11 +77,15 @@ export default function MapView({
   selected: Set<string>;
   /** 블록별 면적 동의율. null 이면 표시를 그리지 않는다 */
   blocks: BlockConsent[] | null;
+  /** 필지별 추정 소유자 수. null 이면 표시를 그리지 않는다 */
+  owners: OwnerMark[] | null;
   basemap: Basemap;
   flyTo: [number, number] | null;
   onParcelClick: (props: ParcelProps, additive: boolean) => void;
   /** 블록 표시를 누르면 그 블록 필지를 고른다 */
   onBlockClick: (block: BlockConsent) => void;
+  /** 소유자 수 표시를 누르면 그 필지를 고르고 판별 원인을 보여준다 */
+  onOwnerClick: (mark: OwnerMark) => void;
 }) {
   const prepared = useMemo<PreparedParcel[]>(
     () =>
@@ -228,6 +236,24 @@ export default function MapView({
           eventHandlers={{ click: () => onBlockClick(b) }}
         />
       ))}
+
+      {owners?.map((m) => {
+        const w = ownerBadgeWidth(m.owners);
+        return (
+          <Marker
+            key={m.pnu}
+            position={[m.anchor[0], shiftLng(m.anchor[1])]}
+            icon={divIcon({
+              html: ownerBadgeHtml(m.owners, m.tone),
+              className: "",
+              iconSize: [w, OWNER_BADGE_H],
+              iconAnchor: [w / 2, OWNER_BADGE_H / 2],
+            })}
+            title={`논현동 ${m.jibun} · 추정 소유자 ${m.owners}명`}
+            eventHandlers={{ click: () => onOwnerClick(m) }}
+          />
+        );
+      })}
 
       <FlyTo target={flyTo} />
     </MapContainer>

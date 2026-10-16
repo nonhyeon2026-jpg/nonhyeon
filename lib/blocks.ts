@@ -1,7 +1,7 @@
 import { summarizeZone } from "./consent";
 import type { ConsentMap } from "./consent";
 import { pointInRing } from "./geo";
-import type { ConsentInfo, ParcelFeature, ParcelProps } from "./types";
+import type { ParcelFeature, ParcelProps } from "./types";
 
 /**
  * 블록(가구, 街區) — 도로로 둘러싸인 필지 덩어리.
@@ -124,6 +124,19 @@ export function computeBlocks(features: ParcelFeature[], zonePnus: Set<string>):
     });
   }
   return blocks;
+}
+
+/**
+ * 필지 하나의 한가운데 [lat, lng]. 블록과 같은 방법이라 ㄱ자 필지에서도 필지 안에 앉는다.
+ * 저장된 centroid 는 면적 무게중심이라 옆 필지나 도로로 빠지기도 한다.
+ */
+export function parcelAnchor(f: ParcelFeature): [number, number] {
+  const [lng0, lat0] = f.geometry.coordinates[0][0];
+  const ring = f.geometry.coordinates[0].map(
+    ([lng, lat]) => [(lng - lng0) * M_PER_DEG_LNG, (lat - lat0) * M_PER_DEG_LAT] as Pt,
+  );
+  const [x, y] = centerOf([ring]);
+  return [lat0 + y / M_PER_DEG_LAT, lng0 + x / M_PER_DEG_LNG];
 }
 
 /** 한가운데를 찾을 때 쓰는 격자 한 칸 (m) */
@@ -270,13 +283,6 @@ export type BlockConsent = Block & {
   people: number;
 };
 
-/**
- * 명부 한 건에서 참여의향서를 낸 사람 수.
- * 통건물 제출은 소유자 한 명이 낸 것이라 전 호가 동의여도 1명이다.
- * 그 밖에는 호마다 한 명으로 센다 — 호 목록이 없으면 입력된 제출 호수를 쓴다.
- */
-export const submitters = (c: ConsentInfo) => (c.wholeBuilding ? 1 : c.submitted);
-
 /** 블록마다 면적 동의율과 제출 인원을 매긴다. 면적은 구역 카드와 같은 summarizeZone 을 쓴다 */
 export function blockConsent(
   blocks: Block[],
@@ -285,15 +291,12 @@ export function blockConsent(
 ): BlockConsent[] {
   return blocks.map((b) => {
     const s = summarizeZone(b.pnus, propsOf, consent);
-    // 딸림 지번은 대표 지번과 같은 문서라 한 번만 센다
-    const counted = new Set<string>();
-    let people = 0;
-    for (const pnu of b.pnus) {
-      const c = consent[pnu];
-      if (!c || counted.has(c.pnu)) continue;
-      counted.add(c.pnu);
-      people += submitters(c);
-    }
-    return { ...b, area: s.area, consentedArea: s.consentedArea, areaRatio: s.areaRatio, people };
+    return {
+      ...b,
+      area: s.area,
+      consentedArea: s.consentedArea,
+      areaRatio: s.areaRatio,
+      people: s.people,
+    };
   });
 }

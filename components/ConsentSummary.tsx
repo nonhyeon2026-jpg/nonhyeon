@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CONSENT_GRADIENT, consentColor, residentialColor, summarizeZone } from "@/lib/consent";
+import {
+  CONSENT_GRADIENT,
+  consentColor,
+  pct,
+  residentialColor,
+  summarizeZone,
+} from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { RESIDENTIAL_CLASSES } from "@/lib/zoning";
 import type { ParcelProps, Zone } from "@/lib/types";
@@ -10,8 +16,9 @@ import type { ParcelProps, Zone } from "@/lib/types";
  * 구역별 참여의향서 제출 현황 요약.
  * 지도 위에 얹혀서, 필지를 하나씩 눌러보지 않아도 구역 전체 상황이 보이게 한다.
  *
- * 제출률의 분모는 건축물대장 호수 합계가 아니라 구역에 설정된 총 소유자 수다.
- * 한 사람이 여러 호를 가진 경우가 있어 호수 합계는 실제 소유자보다 부풀려진다.
+ * 제출률은 호가 아니라 사람으로 센다 — 낸 사람 / 소유자 수.
+ * 분모는 구역에 설정된 총 소유자 수가 있으면 그 값, 없으면 추정 소유자 수(parcelOwners)다.
+ * 건축물대장 호수 합계는 다가구·통건물을 호마다 세어 실제 소유자보다 부풀려진다.
  *
  * 면적 동의율은 호수와 별개로 필지 단위다. 다세대에서 한 호만 냈어도 그 필지 면적은
  * 전부 동의 쪽에 들어간다 — 사업 대상에 필지가 통째로 들어가기 때문이다.
@@ -160,10 +167,9 @@ function ZoneCard({
       </div>
 
       <div className="mt-2 text-[11px] text-slate-300">
-        총 {(s.owners ?? s.total).toLocaleString()}
-        {s.owners ? "명" : "호"} 중{" "}
+        {s.owners ? "총" : "추정"} 소유자 {(s.owners ?? s.estimatedOwners).toLocaleString()}명 중{" "}
         <span className="font-semibold" style={{ color }}>
-          {s.submitted.toLocaleString()}호
+          {s.people.toLocaleString()}명
         </span>{" "}
         제출
       </div>
@@ -172,9 +178,12 @@ function ZoneCard({
         {s.owners !== null && (
           <>
             <br />
-            건축물대장 호수 합계 {s.total.toLocaleString()}호 기준으로는 {s.ratio}%
+            추정 소유자 {s.estimatedOwners.toLocaleString()}명 기준으로는{" "}
+            {pct(s.people, s.estimatedOwners)}%
           </>
         )}
+        <br />
+        호수 기준 {s.total.toLocaleString()}호 중 {s.submitted.toLocaleString()}호 ({s.ratio}%)
       </div>
 
       <div className="mt-2.5 border-t border-slate-800 pt-2">
@@ -230,12 +239,15 @@ function ZoneCard({
 
       {adminMode ? (
         <div className="mt-2.5 border-t border-slate-800 pt-2.5">
-          <label className="block text-[10px] text-slate-400">총 소유자 수 (제출률 분모)</label>
+          <label className="block text-[10px] text-slate-400">
+            총 소유자 수 (제출률 분모 · 추정 {s.estimatedOwners.toLocaleString()}명)
+          </label>
           <div className="mt-1 flex gap-1.5">
             <input
               type="number"
               min={1}
               value={draft}
+              placeholder={String(s.estimatedOwners)}
               disabled={busy}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submit()}

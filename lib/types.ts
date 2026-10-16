@@ -16,6 +16,16 @@ export type BuildingInfo = {
   families?: number;
   /** 호수 */
   hoCnt?: number;
+  /**
+   * 구분소유 호수 — 집합건축물(다세대·연립·아파트 등) 동의 호수 합계.
+   * 일반건축물(단독·다가구·근생)뿐이면 0 이다. 가구가 여럿이어도 소유자는 1명이기 때문
+   */
+  collective?: number;
+  /**
+   * 토지소유정보(호별 소유 변동)로 어림한 소유자. 집합건축물 중 대지권 호 행이 있는 필지만 있다.
+   * scripts/import-possession.mjs 가 붙인다
+   */
+  owners?: PossessionOwners;
   structure?: string | null;
   floors: number;
   basement: number;
@@ -24,6 +34,23 @@ export type BuildingInfo = {
   approvedAt: string | null;
   vlRat: number | null;
   bcRat: number | null;
+};
+
+export type PossessionOwners = {
+  /** 대지권이 붙은 호 수 */
+  units: number;
+  /** 추정 소유자 수. 다른 지번과 같은 건물(sameAs)이면 0 */
+  owners: number;
+  /** 한 사람 몫으로 묶인 호 수 */
+  grouped: number;
+  /** whole: 통건물 · partial: 일부 호를 한 사람이 여럿 가짐 · none: 묶인 호 없음 */
+  pattern: "whole" | "partial" | "none";
+  /** 같은 날 보존등기가 거주지 구분으로 갈림 — 공동건축주 의심, 열람으로 확인할 필지 */
+  check: boolean;
+  /** 이 건물을 먼저 센 지번 (한 건물이 두 지번에 걸친 경우) */
+  sameAs?: string;
+  /** 자료 기준월 (YYYY-MM) */
+  asOf: string | null;
 };
 
 export type ParcelProps = {
