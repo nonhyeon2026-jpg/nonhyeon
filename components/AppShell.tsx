@@ -91,7 +91,17 @@ export default function AppShell({
         : BLOCK_ROW_KEYS.filter((x) => x === k || v.includes(x)),
     );
   const showOwners = overlay === "owners";
-  const toggleOverlay = (o: "blocks" | "owners") => setOverlay((v) => (v === o ? "none" : o));
+  /** 소유자 숫자를 눌러 고른 필지. 표시를 끄면 그 선택도 풀어 누르기 전으로 돌린다 */
+  const ownerPickRef = useRef<string | null>(null);
+  const toggleOverlay = (o: "blocks" | "owners") => {
+    const off = overlay === o;
+    setOverlay(off ? "none" : o);
+    if (overlay === "owners" && ownerPickRef.current) {
+      const pick = ownerPickRef.current;
+      ownerPickRef.current = null;
+      setSelected((v) => (v.size === 1 && v.has(pick) ? new Set() : v));
+    }
+  };
   const [showCadastral, setShowCadastral] = useState(false);
   const [basemap, setBasemap] = useState<Basemap>("dark");
   const [flyTo, setFlyTo] = useState<[number, number] | null>(null);
@@ -278,6 +288,7 @@ export default function AppShell({
   const handleOwnerClick = useCallback(
     (mark: OwnerMark) => {
       setSelected(new Set([mark.pnu]));
+      ownerPickRef.current = mark.pnu;
       setFlyTo(null);
       flash(`논현동 ${mark.jibun} · 추정 소유자 ${mark.owners}명 — ${mark.reasons[0]}`);
     },

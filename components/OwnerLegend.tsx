@@ -75,14 +75,6 @@ export default function OwnerLegend({
           })}
         </tbody>
       </table>
-      <p className="mt-1.5 text-[10px] leading-snug text-slate-600">{OWNER_TONE_HINT}</p>
     </div>
   );
 }
-
-const OWNER_TONE_HINT =
-  "통건물: 한 사람이 건물 전체 · 일부 묶음: 한 사람이 여러 호 · 확인 필요: 공동건축주 의심 · " +
-  "여러 동: 한 땅의 동마다 주인 · 집합건물: 1호 1명 · 단독·다가구·근생: 가구 수와 상관없이 1명" +
-  "(빈 땅·공동명의 포함) · " +
-  "다른 지번에서 셈: 딸림 지번·같은 건물(0명). " +
-  "확대 17 이상에서 숫자가 보입니다.";
