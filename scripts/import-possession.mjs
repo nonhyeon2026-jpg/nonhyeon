@@ -22,6 +22,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
 const CACHE_PATH = resolve(ROOT, "data/possession-cache.json");
+/**
+ * 토지소유정보 기준월 뒤에 묶인 호가 팔린 필지 (국토부 실거래가로 확인).
+ * 법인이 묶여 가진 호를 개인에게 판 거래만 넣는다 — 판 사람이 묶인 그 법인인 게 확실하다.
+ * added 는 늘어난 사람 수다. 묶인 호를 다 팔았으면 그 법인이 빠지므로 sold − 1 이다.
+ */
+const SOLD_PATH = resolve(ROOT, "scripts/possession-sold.json");
 
 const KEY = process.env.VWORLD_KEY;
 const DOMAIN = process.env.VWORLD_DOMAIN ?? "http://localhost";
@@ -237,6 +243,7 @@ function landOwners(rows) {
 let merged = 0;
 let units = 0;
 let owners = 0;
+const soldByJibun = existsSync(SOLD_PATH) ? JSON.parse(readFileSync(SOLD_PATH, "utf8")) : {};
 const patterns = { whole: 0, partial: 0, none: 0, check: 0, noUnits: 0, sameAs: 0 };
 const landStat = { parcels: 0, shared: 0, owners: 0 };
 
@@ -280,6 +287,14 @@ for (const f of parcels.features) {
     continue;
   }
   firstBySig.set(sig, f.properties.jibun);
+
+  const sold = soldByJibun[f.properties.jibun];
+  if (sold) {
+    est.owners += sold.added;
+    est.grouped = Math.max(0, est.grouped - sold.sold);
+    est.pattern = est.grouped ? "partial" : "none";
+    est.sold = sold;
+  }
 
   b.owners = est;
   merged += 1;

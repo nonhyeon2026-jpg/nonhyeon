@@ -204,6 +204,11 @@ export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
         ],
       };
     }
+    if (o.sold) {
+      base.reasons.push(
+        `기준월 뒤 실거래가: ${o.sold.note} (${o.sold.period}) → +${o.sold.added}명 반영`,
+      );
+    }
     if (o.check) {
       base.tone = "check";
       base.reasons.push(

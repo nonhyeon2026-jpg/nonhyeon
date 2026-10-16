@@ -51,6 +51,8 @@ export type PossessionOwners = {
   check: boolean;
   /** 이 건물을 먼저 센 지번 (한 건물이 두 지번에 걸친 경우) */
   sameAs?: string;
+  /** 기준월 뒤 실거래가로 확인한, 묶인 호의 매도 (scripts/possession-sold.json) */
+  sold?: { sold: number; added: number; period: string; note: string };
   /** 자료 기준월 (YYYY-MM) */
   asOf: string | null;
 };
