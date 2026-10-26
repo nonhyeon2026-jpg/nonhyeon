@@ -1,6 +1,6 @@
 "use client";
 
-import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
+import { consentColor, isSharedInto, liveGroups, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
@@ -119,6 +119,14 @@ export default function ParcelBrief({
             ) : (
               <div className="mt-1 text-[10px] text-slate-500">
                 {c.wholeBuilding ? "통건물 소유자 제출 (전 호 동의)" : "호 구분 없음"}
+              </div>
+            )}
+            {!c.wholeBuilding && liveGroups(c.units, c.unitGroups).length > 0 && (
+              <div className="mt-1 text-[10px] text-slate-500">
+                한 사람이 함께 낸 호:{" "}
+                {liveGroups(c.units, c.unitGroups)
+                  .map((g) => g.join("·"))
+                  .join(", ")}
               </div>
             )}
           </>

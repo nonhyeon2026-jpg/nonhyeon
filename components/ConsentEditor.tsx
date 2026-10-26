@@ -1,15 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { consentColor, parcelUnits } from "@/lib/consent";
+import { consentColor, liveGroups, parcelUnits } from "@/lib/consent";
 import type { ConsentInfo, ConsentInput, ParcelProps } from "@/lib/types";
 
-/** 호 목록 입력은 쉼표·공백·줄바꿈 아무거나로 나눈다 — 명부를 그대로 붙여넣는 일이 많다 */
+/**
+ * 호 목록 입력은 쉼표·공백·줄바꿈 아무거나로 나눈다 — 명부를 그대로 붙여넣는 일이 많다
+ * (한 줄 입력칸에 열을 붙여넣으면 줄바꿈이 공백이 된다).
+ * 다만 "A동", "2층", "지하", "제" 처럼 호 앞에 붙는 말은 뒤 토막과 다시 잇는다. 그러지 않으면
+ * "A동 201호" 가 "A동" 과 "201호" 로 쪼개져 A동·B동의 201호가 한 호로 합쳐진다.
+ */
 const parseUnits = (text: string) =>
+  text
+    .split(/,/)
+    .flatMap((part) => {
+      const out: string[] = [];
+      let head = "";
+      for (const t of part.trim().split(/\s+/)) {
+        const word = head ? `${head} ${t}` : t;
+        if (/(동|층|^지하|^제)$/.test(t)) head = word;
+        else {
+          out.push(word);
+          head = "";
+        }
+      }
+      if (head) out.push(head);
+      return out;
+    })
+    .map((u) => u.trim())
+    .filter((u) => u && u !== "-");
+
+/** 묶을 지번은 공백으로 나눠 적어도 된다 */
+const parseJibuns = (text: string) =>
   text
     .split(/[,\s]+/)
     .map((u) => u.trim())
-    .filter((u) => u && u !== "-");
+    .filter(Boolean);
 
 const label = "block text-[10px] uppercase tracking-wider text-slate-500";
 const field =
@@ -62,6 +88,9 @@ export default function ConsentEditor({
       ? Math.min(units.length, totalNum)
       : Math.max(0, Math.min(Math.round(Number(submitted) || 0), totalNum));
   const ratio = Math.round((submittedNum / totalNum) * 100);
+  // 명부에서 한 사람이 함께 낸 호 묶음. 목록에서 지운 호는 묶음에서도 빠진다
+  const groups = wholeBuilding ? [] : liveGroups(units, consent?.unitGroups);
+  const people = units.length - groups.reduce((n, g) => n + g.length - 1, 0);
 
   /**
    * "총 호수를 제출 호수로 갈음" 은 명부를 들여올 때 대장에서 호수를 못 구했다는
@@ -70,7 +99,7 @@ export default function ConsentEditor({
    */
   const totalEstimated = consent?.totalEstimated ? totalNum === consent.total : false;
 
-  const sharedJibuns = parseUnits(sharedText);
+  const sharedJibuns = parseJibuns(sharedText);
   const unknownJibuns = sharedJibuns.filter((j) => !pnuOfJibun(j));
 
   const save = async () => {
@@ -89,6 +118,7 @@ export default function ConsentEditor({
       wholeBuilding,
       totalEstimated,
       sharedPnus: sharedJibuns.map((j) => pnuOfJibun(j) as string),
+      unitGroups: groups,
     });
     if (ok) onClose();
   };
@@ -131,12 +161,18 @@ export default function ConsentEditor({
         <input
           value={unitText}
           onChange={(e) => setUnitText(e.target.value)}
-          placeholder="예: 101, 102, B01 (비워두면 호 구분 없음)"
+          placeholder="예: 101, 102, A동 201호 (비워두면 호 구분 없음)"
           className={field}
         />
         {units.length > 0 && (
           <p className="mt-0.5 text-[10px] text-slate-500">
             {units.length}개 호 — 제출 호수는 이 목록에서 셉니다
+            {groups.length > 0 && (
+              <>
+                {" "}
+                · 낸 사람 {people}명 ({groups.map((g) => g.join("·")).join(", ")} 은 한 사람)
+              </>
+            )}
           </p>
         )}
       </div>

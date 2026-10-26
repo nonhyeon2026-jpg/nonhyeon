@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import ConsentEditor from "./ConsentEditor";
 import OwnerReason from "./OwnerReason";
-import { consentColor, isSharedInto, summarizeZone } from "@/lib/consent";
+import { consentColor, isSharedInto, liveGroups, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ConsentInput, ParcelCollection, ParcelProps, Zone } from "@/lib/types";
 import { zoningText } from "@/lib/zoning";
@@ -251,6 +251,14 @@ function ConsentCard({
       )}
       {c.wholeBuilding && c.units.length > 0 && (
         <div className="mt-1 text-[10px] text-slate-500">통건물 소유자 제출 (전 호 동의)</div>
+      )}
+      {!c.wholeBuilding && liveGroups(c.units, c.unitGroups).length > 0 && (
+        <div className="mt-1 text-[10px] text-slate-500">
+          한 사람이 함께 낸 호:{" "}
+          {liveGroups(c.units, c.unitGroups)
+            .map((g) => g.join("·"))
+            .join(", ")}
+        </div>
       )}
       {c.totalEstimated && (
         <div className="mt-1 text-[10px] text-slate-600">

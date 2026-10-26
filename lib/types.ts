@@ -144,6 +144,12 @@ export type ConsentInfo = {
    * 딸림 지번은 이 문서를 그대로 쓰고 합계에서는 한 번만 센다.
    */
   sharedPnus?: string[];
+  /**
+   * 한 사람이 함께 낸 호 묶음 (2호 이상만). 명부 한 줄이 "606, 1105호" 이거나 같은 지번에
+   * 같은 이름이 두 줄 이상이면 한 묶음이다. 이름은 남기지 않는다 (scripts/merge-consent.mjs).
+   * 낸 사람 수는 제출 호수에서 묶음마다 (호 수 − 1)을 뺀 값이다 (lib/consent.ts 의 submitters).
+   */
+  unitGroups?: string[][];
 };
 
 /**
@@ -158,4 +164,5 @@ export type ConsentInput = {
   wholeBuilding?: boolean;
   totalEstimated?: boolean;
   sharedPnus?: string[];
+  unitGroups?: string[][];
 };

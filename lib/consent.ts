@@ -83,9 +83,31 @@ const ownedWhole = (props?: ParcelProps) => props?.building?.owners?.pattern ===
  * 명부 한 건에서 참여의향서를 낸 사람 수.
  * 통건물 제출, 또는 토지소유정보상 통건물인 필지는 소유자 한 명이 낸 것이라 1명이다.
  * 그 밖에는 호마다 한 명으로 센다 — 호 목록이 없으면 입력된 제출 호수를 쓴다.
+ * 명부에서 한 사람이 여러 호를 함께 낸 묶음(unitGroups)은 한 명으로 줄인다.
  */
-export const submitters = (c: ConsentInfo, props?: ParcelProps) =>
-  c.wholeBuilding ? 1 : ownedWhole(props) ? Math.min(1, c.submitted) : c.submitted;
+export const submitters = (c: ConsentInfo, props?: ParcelProps) => {
+  if (c.wholeBuilding) return 1;
+  if (ownedWhole(props)) return Math.min(1, c.submitted);
+  const extra = liveGroups(c.units, c.unitGroups).reduce((n, g) => n + g.length - 1, 0);
+  return Math.max(Math.min(1, c.submitted), c.submitted - extra);
+};
+
+/**
+ * 한 사람 묶음에서 지금 호 목록에 있는 호만 남긴다. 남은 호가 하나 이하인 묶음은 버린다 —
+ * 관리자가 호를 지우면 묶음도 저절로 따라 줄어야 낸 사람 수가 어긋나지 않는다.
+ * 한 호가 두 묶음에 들면 앞 묶음에만 둔다.
+ */
+export function liveGroups(units: string[], groups?: string[][]): string[][] {
+  const left = new Set(units);
+  const out: string[][] = [];
+  for (const g of groups ?? []) {
+    const kept = [...new Set(g)].filter((u) => left.has(u));
+    if (kept.length < 2) continue;
+    for (const u of kept) left.delete(u);
+    out.push(kept);
+  }
+  return out;
+}
 
 /**
  * 필지의 추정 소유자 수 (토지등소유자).

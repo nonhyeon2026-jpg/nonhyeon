@@ -1,4 +1,4 @@
-import { expandShared } from "./consent";
+import { expandShared, liveGroups } from "./consent";
 import type { ConsentMap } from "./consent";
 import { CONSENT_COLLECTION, mongoDb } from "./mongo";
 import type { ConsentInfo, ConsentInput } from "./types";
@@ -54,6 +54,13 @@ export function normalizeConsent(pnu: string, jibun: string, input: ConsentInput
     wholeBuilding,
     totalEstimated: Boolean(input.totalEstimated),
     sharedPnus,
+    // 통건물이면 한 명이라 묶음이 뜻이 없다. 지운 호는 묶음에서도 뺀다
+    unitGroups: wholeBuilding
+      ? []
+      : liveGroups(
+          unique,
+          (input.unitGroups ?? []).map((g) => (Array.isArray(g) ? g.map((u) => String(u).trim()) : [])),
+        ),
   };
 }
 
