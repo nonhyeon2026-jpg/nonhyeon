@@ -289,6 +289,30 @@ export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
 
   if (c) {
     const people = submitters(c, props);
+    /*
+     * 낸 호의 주인은 명부로 다 드러났으므로 소유자는 많아야 "낸 사람 + 안 낸 호 수" 다.
+     * 한 사람이 여러 호를 낸 필지(unitGroups)에서 추정보다 적어진다 — 173-2 는 3명이 12호를
+     * 다 내서, 토지소유정보로 묶은 6명이 아니라 3명이다. 호수는 추정에 쓴 것과 같은 값을 쓴다.
+     */
+    const units = o ? (o.sameAs ? null : o.units) : (b?.collective ?? null);
+    const cap = units === null ? Infinity : people + Math.max(0, units - c.submitted);
+    if (cap < base.owners) {
+      const left = cap - people;
+      return {
+        owners: cap,
+        tone: "grouped",
+        reasons: [
+          `명부 제출 ${people}명이 ${c.submitted}호를 냈습니다 — ${
+            left ? `안 낸 ${left}호를 더해 많아야 ${cap}명` : `전 호가 이 ${cap}명의 것`
+          }`,
+          `한 사람이 함께 낸 호: ${liveGroups(c.units, c.unitGroups)
+            .map((g) => g.join("·"))
+            .join(", ")}`,
+          `추정(${base.owners}명)보다 적어 이쪽을 따릅니다`,
+          ...base.reasons,
+        ],
+      };
+    }
     if (people > base.owners) {
       return {
         owners: people,
