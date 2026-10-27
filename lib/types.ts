@@ -79,7 +79,8 @@ export type ParcelProps = {
    * 땅 소유자 (토지소유정보). 집합건축물이 아닌 필지(일반건축물·빈 땅)에만 붙는다.
    * owners 가 2 이상이면 땅을 여럿이 지분으로 나눠 가진 것이다 (scripts/import-possession.mjs)
    */
-  land?: { owners: number; corporate: number; asOf: string | null };
+  /** public: 땅 전체가 국유지·시도유지·군유지 (scripts/import-possession.mjs) */
+  land?: { owners: number; corporate: number; asOf: string | null; public?: boolean };
   /** 둘 이상의 용도지역에 걸친 필지의 면적 비율 (넓은 순, share 는 0~1) */
   zoningMix?: { name: string; share: number }[];
   /** [lat, lng] */

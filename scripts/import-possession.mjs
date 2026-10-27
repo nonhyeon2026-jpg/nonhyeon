@@ -225,6 +225,9 @@ const signature = (rows) =>
     .join(",");
 const firstBySig = new Map();
 
+/** 토지소유정보의 소유 구분 중 국공유지 */
+const PUBLIC_KINDS = new Set(["국유지", "시 도유지", "군유지"]);
+
 /**
  * 땅 소유자. 호 행이 없는 필지는 소유자마다 한 줄이라 공유인 일련번호가 다른 줄 수가 곧 공유자 수다.
  */
@@ -233,11 +236,14 @@ function landOwners(rows) {
   if (!land.length) return null;
   const people = new Map();
   for (const r of land) people.set(r.sn, r);
-  return {
+  const out = {
     owners: people.size,
     corporate: [...people.values()].filter((r) => r.kind && r.kind !== "개인").length,
     asOf: land[0]?.ym ?? null,
   };
+  // 땅 전체가 국유지·시도유지·군유지면 표시한다 — 건물 없는 국공유지는 소유자로 세지 않는다
+  if ([...people.values()].every((r) => PUBLIC_KINDS.has(r.kind))) out.public = true;
+  return out;
 }
 
 let merged = 0;

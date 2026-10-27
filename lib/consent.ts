@@ -246,6 +246,16 @@ export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
         "토지소유정보에 호별 기록이 없어(대지권 미등기 등) 건축물대장 호수를 그대로 씁니다",
       ],
     };
+  } else if (!b && props.land?.public) {
+    // 205-7(국유지 공원)처럼 건물 없는 국공유지는 의향을 물을 토지등소유자가 없다
+    base = {
+      owners: 0,
+      tone: "none",
+      reasons: [
+        "건물 없는 국공유지 — 소유자로 세지 않습니다",
+        `땅 전체가 국유지·시도유지·군유지입니다${props.land.asOf ? ` (토지소유정보 ${props.land.asOf} 기준)` : ""}`,
+      ],
+    };
   } else {
     /*
      * 일반건축물·빈 땅. 구분소유가 아니라 호·가구로는 사람을 나눌 수 없다.
