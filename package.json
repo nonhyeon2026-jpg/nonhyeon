@@ -20,7 +20,8 @@
     "link:consent": "node scripts/link-consent.mjs",
     "merge:consent": "node scripts/merge-consent.mjs",
     "import:zoning": "node scripts/import-zoning.mjs",
-    "import:possession": "node scripts/import-possession.mjs"
+    "import:possession": "node scripts/import-possession.mjs",
+    "check:road-trades": "node --env-file=.env.local scripts/check-road-trades.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
