@@ -293,8 +293,10 @@ export function ownerBasis(props: ParcelProps, c?: ConsentInfo): OwnerBasis {
      * 낸 호의 주인은 명부로 다 드러났으므로 소유자는 많아야 "낸 사람 + 안 낸 호 수" 다.
      * 한 사람이 여러 호를 낸 필지(unitGroups)에서 추정보다 적어진다 — 173-2 는 3명이 12호를
      * 다 내서, 토지소유정보로 묶은 6명이 아니라 3명이다. 호수는 추정에 쓴 것과 같은 값을 쓴다.
+     * 집합건축물만 따진다 — 일반건축물은 collective 가 0 이라 "0호" 로 읽으면 소유자가 낸 사람
+     * 수까지 깎인다 (153-1: 11 → 2명, 제출 0 필지는 0명).
      */
-    const units = o ? (o.sameAs ? null : o.units) : (b?.collective ?? null);
+    const units = o ? (o.sameAs ? null : o.units) : b?.collective ? b.collective : null;
     const cap = units === null ? Infinity : people + Math.max(0, units - c.submitted);
     if (cap < base.owners) {
       const left = cap - people;
