@@ -113,6 +113,8 @@ try {
   const created = [];
   const skipped = [];
   const unmatched = [];
+  /** DB 를 바꾸지 않아도 눈으로 봐야 하는 것 (바뀌는 문서에만 붙는 notes 와 따로 둔다) */
+  const warnings = [];
 
   for (const [jibun, e] of after) {
     const pnu = pnuOf.get(jibun);
@@ -176,9 +178,14 @@ try {
         target.total = Math.max(target.units.length, registered ?? 1);
       }
       // 새 명부에서 늘어난 호
+      const absent = [];
       for (const u of e.units) {
         if (!looksLikeUnit(u)) continue;
-        if (old && findUnit(old.units, u)) continue;
+        if (old && findUnit(old.units, u)) {
+          // 관리자가 뺀 호일 수도, 예전 호 목록이 쪼개지며 잃은 호일 수도 있다 (177-21 나동 201·202·301호)
+          if (!findUnit(target.units, u)) absent.push(u);
+          continue;
+        }
         const same = findUnit(target.units, u);
         if (same) {
           if (unitKey(same) !== unitKey(u)) note(target.pnu, `"${u}" 는 이미 있는 "${same}" 와 같은 호로 봄`);
@@ -186,6 +193,20 @@ try {
         }
         target.units.push(u);
         note(target.pnu, `+ ${u}${via}`);
+      }
+      if (absent.length) {
+        warnings.push(
+          `논현동 ${jibun}${via} — 두 명부에 다 있는데 DB 에 없는 호: ${absent.join(", ")}. 관리자가 뺀 게 아니면 관리자 화면에서 넣으세요`,
+        );
+      }
+      // 호를 알 수 없는 줄("몇 호??")은 호로 넣지 않는다. 낸 사람이 빠지지 않게 알려 준다.
+      // 관리자가 그 표기 그대로(172-4 "단독주택") 또는 "호수미상" 으로 넣어 둔 만큼은 세어져 있다
+      const unknown = e.units.filter((u) => !looksLikeUnit(u));
+      const marked = target.units.filter((u) => u.startsWith("호수미상") || !looksLikeUnit(u)).length;
+      if (unknown.length > marked) {
+        warnings.push(
+          `논현동 ${jibun}${via} — 호를 알 수 없는 줄 ${unknown.length}건(${unknown.join(", ")}). 낸 사람으로 세려면 관리자 화면에서 "호수미상" 처럼 넣으세요`,
+        );
       }
     }
 
@@ -277,6 +298,7 @@ try {
 
   console.log("\n──────────");
   for (const s of skipped) console.log(`· ${s}`);
+  for (const w of warnings) console.log(`! ${w}`);
   if (unmatched.length) console.log(`· 지적도에서 못 찾은 주소 ${unmatched.length}건: ${unmatched.join(", ")}`);
   const many = namesInManyParcels(resolve(ROOT, newPath));
   if (many.length) {
