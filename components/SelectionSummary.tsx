@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { consentColor, pct, summarizeZone } from "@/lib/consent";
+import { consentColor, summarizeZone } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type { ParcelProps } from "@/lib/types";
 
@@ -12,8 +12,7 @@ import type { ParcelProps } from "@/lib/types";
  * 구역 소속과 무관하게 선택된 필지만 센다. 계산은 구역 요약과 같은
  * summarizeZone 을 쓰므로 같은 범위를 고르면 구역 카드와 숫자가 맞는다.
  *
- * 소유자 수는 구역처럼 저장된 값이 없다. 기본은 건축물대장 호수 합계로 두고,
- * 현장에서 아는 숫자를 넣어 바꿔볼 수 있게 한다 (저장하지 않는다).
+ * 소유자 수는 구역처럼 저장된 값이 없어 추정 소유자 수(parcelOwners)만 쓴다.
  *
  * 넓은 화면에서는 이 카드가 뜨는 동안 구역 전체 카드를 치운다 (AppShell) —
  * 280px 한 줄에 둘 다 쌓으면 아래 지번 검색·필지 목록이 밀려난다.
@@ -22,26 +21,16 @@ export default function SelectionSummary({
   selected,
   propsOf,
   consent,
-  owners,
-  onOwnersChange,
   compact = false,
 }: {
   selected: Set<string>;
   propsOf: Map<string, ParcelProps>;
   consent: ConsentMap;
-  /** 제출률의 분모로 쓸 소유자 수. 비어 있으면 추정 소유자 수를 쓴다 */
-  owners: string;
-  onOwnersChange: (v: string) => void;
   /** 좁은 화면용 — 두 비율만 한 줄로 */
   compact?: boolean;
 }) {
   const pnus = useMemo(() => [...selected], [selected]);
-  const parsed = Math.round(Number(owners));
-  const usable = owners.trim() && Number.isFinite(parsed) && parsed >= 1 ? parsed : null;
-  const s = useMemo(
-    () => summarizeZone(pnus, propsOf, consent, usable),
-    [pnus, propsOf, consent, usable],
-  );
+  const s = useMemo(() => summarizeZone(pnus, propsOf, consent), [pnus, propsOf, consent]);
 
   // 선택이 없거나 필지 데이터가 아직 안 왔으면 그리지 않는다
   if (!s.zoneParcels) return null;
@@ -88,7 +77,7 @@ export default function SelectionSummary({
       </div>
 
       <div className="mt-2 text-[11px] text-slate-300">
-        {s.owners ? "총" : "추정"} 소유자 {(s.owners ?? s.estimatedOwners).toLocaleString()}명 중{" "}
+        추정 소유자 {s.estimatedOwners.toLocaleString()}명 중{" "}
         <span className="font-semibold" style={{ color }}>
           {s.people.toLocaleString()}명
         </span>{" "}
@@ -96,9 +85,6 @@ export default function SelectionSummary({
       </div>
       <div className="mt-0.5 text-[11px] text-slate-500">
         {s.submittedParcels.toLocaleString()}개 필지에서 제출
-        {s.owners !== null && (
-          <> · 추정 {s.estimatedOwners.toLocaleString()}명 기준 {pct(s.people, s.estimatedOwners)}%</>
-        )}
         <br />
         호수 기준 {s.total.toLocaleString()}호 중 {s.submitted.toLocaleString()}호 ({s.ratio}%)
       </div>
@@ -127,24 +113,9 @@ export default function SelectionSummary({
         </div>
       </div>
 
-      <div className="mt-2.5 border-t border-slate-800 pt-2.5">
-        <label className="block text-[10px] text-slate-400">
-          소유자 수 (비우면 추정 {s.estimatedOwners.toLocaleString()}명)
-        </label>
-        <input
-          type="number"
-          min={1}
-          value={owners}
-          placeholder={String(s.estimatedOwners)}
-          onChange={(e) => onOwnersChange(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs outline-none focus:border-emerald-500"
-        />
-        <p className="mt-1 text-[10px] leading-snug text-slate-600">
-          선택이 바뀌면 지워집니다. 저장되지 않습니다.
-          <br />
-          선택을 해제하면 구역 전체 현황이 다시 보입니다.
-        </p>
-      </div>
+      <p className="mt-2.5 border-t border-slate-800 pt-2 text-[10px] leading-snug text-slate-600">
+        선택을 해제하면 구역 전체 현황이 다시 보입니다.
+      </p>
     </div>
   );
 }

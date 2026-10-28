@@ -67,8 +67,6 @@ export default function AppShell({
     () => new Set(initialZones.map((z) => z.id)),
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  /** 선택 영역 제출률의 분모로 쓸 소유자 수. 구역과 달리 저장하지 않는 임시값이다 */
-  const [selectionOwners, setSelectionOwners] = useState("");
   /** 지도에서 영역을 찍는 중 — 그동안은 지도를 덮는 카드를 치운다 */
   const [drawing, setDrawing] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
@@ -146,9 +144,6 @@ export default function AppShell({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  /* 선택이 바뀌면 직접 넣은 소유자 수는 그 선택의 값이 아니므로 지운다 */
-  useEffect(() => setSelectionOwners(""), [selected]);
 
   /** pnu → 소속 구역 */
   const zoneOf = useMemo(() => {
@@ -595,8 +590,6 @@ export default function AppShell({
               selected={selected}
               propsOf={propsOf}
               consent={consent}
-              owners={selectionOwners}
-              onOwnersChange={setSelectionOwners}
               compact
             />
           </div>
@@ -678,8 +671,6 @@ export default function AppShell({
               selected={selected}
               propsOf={propsOf}
               consent={consent}
-              owners={selectionOwners}
-              onOwnersChange={setSelectionOwners}
             />
 
             <ParcelPanel
