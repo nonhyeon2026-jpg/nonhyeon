@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basemap } from "./MapView";
 import AdminLogin from "./AdminLogin";
+import HistoryPanel from "./HistoryPanel";
 import ConsentSummary from "./ConsentSummary";
 import ParcelActions from "./ParcelActions";
 import ParcelBrief from "./ParcelBrief";
@@ -41,6 +42,9 @@ const NaverMapView = dynamic(() => import("./NaverMapView"), {
 
 const EMPTY: ParcelCollection = { type: "FeatureCollection", features: [] };
 
+/** 이만큼 넘는 필지를 한 번에 구역에서 뺄 때는 확인을 받는다 */
+const CONFIRM_REMOVE = 5;
+
 export default function AppShell({
   initialZones,
   boundary,
@@ -71,6 +75,7 @@ export default function AppShell({
   const [drawing, setDrawing] = useState(false);
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
   /**
    * 지도에 얹는 숫자 표시. 블록별(면적 동의율)과 소유자(지번별 추정 소유자 수)는 둘 다
@@ -339,13 +344,40 @@ export default function AppShell({
       flash("선택한 필지는 어떤 구역에도 속해있지 않습니다.");
       return;
     }
+    // 영역 선택으로 블록이 통째로 빠지는 일이 있어(138·139번지) 여러 필지는 한 번 더 묻는다
+    const count = [...byZone.values()].reduce((n, l) => n + l.length, 0);
+    if (count >= CONFIRM_REMOVE) {
+      const sample = [...byZone.values()]
+        .flat()
+        .slice(0, 8)
+        .map((p) => propsOf.get(p)?.jibun ?? p)
+        .join(", ");
+      const more = count > 8 ? ` 외 ${count - 8}필지` : "";
+      if (!window.confirm(`${count}필지를 구역에서 제외할까요?
+${sample}${more}`)) return;
+    }
     let moved = 0;
     for (const [zoneId, pnus] of byZone) {
       const ok = await mutate({ action: "remove", zoneId, pnus });
       if (ok) moved += pnus.length;
     }
     if (moved) flash(`${moved}필지를 구역에서 제외했습니다.`);
-  }, [selected, zoneOf, mutate, flash]);
+  }, [selected, zoneOf, propsOf, mutate, flash]);
+
+  /** 변경 기록에서 빠진 필지를 그 구역에 다시 넣는다 */
+  const restoreToZone = useCallback(
+    async (zoneId: string, pnus: string[]) => {
+      const zone = zones.find((z) => z.id === zoneId);
+      if (!zone) {
+        flash("⚠️ 그 구역이 지금은 없습니다.");
+        return false;
+      }
+      const ok = await mutate({ action: "add", zoneId, pnus });
+      if (ok) flash(`${pnus.length}필지를 ${zone.name}에 다시 넣었습니다.`);
+      return Boolean(ok);
+    },
+    [zones, mutate, flash],
+  );
 
   const setZoneOwners = useCallback(
     async (zoneId: string, owners: number) => {
@@ -493,6 +525,16 @@ export default function AppShell({
           >
             소유자
           </button>
+
+          {adminMode && (
+            <button
+              onClick={() => setHistoryOpen(true)}
+              title="누가 언제 구역 필지와 명부를 바꿨는지 봅니다"
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 transition hover:text-slate-200"
+            >
+              변경 기록
+            </button>
+          )}
 
           <button
             onClick={toggleAdmin}
@@ -690,6 +732,15 @@ export default function AppShell({
 
         </main>
       </div>
+
+      {historyOpen && adminMode && (
+        <HistoryPanel
+          propsOf={propsOf}
+          busy={busy}
+          onClose={() => setHistoryOpen(false)}
+          onRestore={restoreToZone}
+        />
+      )}
 
       {loginOpen && (
         <AdminLogin

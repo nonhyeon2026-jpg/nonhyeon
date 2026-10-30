@@ -123,6 +123,29 @@ export type ZoneMutation =
   | { action: "clear"; zoneId: string }
   | { action: "setOwners"; zoneId: string; owners: number };
 
+/** 구역·명부 변경 기록 한 줄 (MongoDB nonhyun.history, lib/history.ts) */
+export type HistoryEntry = {
+  id: string;
+  /** ISO 시각 */
+  at: string;
+  /** 관리자 아이디. 계정이 하나라 사람을 가리려면 ip·agent 를 함께 본다 */
+  user: string;
+  ip: string;
+  agent: string;
+  kind: "zone" | "consent";
+  /** add·remove·clear·setOwners·createZone·deleteZone · consent 는 save·delete */
+  action: string;
+  zoneId?: string;
+  zoneName?: string;
+  /** 실제로 들어가거나 빠진 필지 (요청에 있었어도 이미 그 상태였던 필지는 뺀다) */
+  pnus?: string[];
+  /** 명부 지번, 또는 구역 총 소유자 수처럼 한 값만 바뀐 경우 */
+  pnu?: string;
+  jibun?: string;
+  before?: unknown;
+  after?: unknown;
+};
+
 /** 지번별 참여의향서 제출 현황. MongoDB nonhyun.consent 컬렉션의 문서 형태다 */
 export type ConsentInfo = {
   pnu: string;

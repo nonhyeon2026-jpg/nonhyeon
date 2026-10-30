@@ -15,6 +15,7 @@ export const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 export const CONSENT_COLLECTION = "consent";
 export const ZONE_COLLECTION = "zones";
 export const ADMIN_COLLECTION = "admins";
+export const HISTORY_COLLECTION = "history";
 
 /** KEY="value" / KEY=value 형태만 읽는 최소 파서 */
 function readEnvFile(file: string): Record<string, string> {
