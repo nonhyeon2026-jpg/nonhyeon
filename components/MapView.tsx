@@ -16,6 +16,7 @@ import {
   unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import { isOutside, OUTSIDE_STROKE } from "./outsideStyle";
 import { shiftLng } from "@/lib/geo";
 import type { ParcelCollection, ParcelProps, Zone } from "@/lib/types";
 
@@ -184,6 +185,12 @@ export default function MapView({
               fillOpacity: 0.1,
             };
 
+        // 구역 밖 제출 — 채움은 제출률 색 그대로, 테두리만 보라 점선으로 가른다
+        const outside = consent && isOutside(props.pnu, consent, zoneOf);
+        const styled = outside
+          ? { ...base, color: OUTSIDE_STROKE, weight: 2, opacity: 0.95, dashArray: "4 4" }
+          : base;
+
         return (
           <Polygon
             key={props.pnu}
@@ -200,7 +207,7 @@ export default function MapView({
                     opacity: 1,
                     dashArray: "4 3",
                   }
-                : base
+                : styled
             }
             eventHandlers={{
               click: (e) => {

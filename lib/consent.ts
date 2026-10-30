@@ -440,6 +440,38 @@ export function summarizeZone(
   };
 }
 
+export type OutsideConsent = {
+  /** 구역 밖 명부 중 한 호라도 낸 것 (대표 지번 문서). 지번 순 */
+  docs: ConsentInfo[];
+  /** 그 문서들의 낸 사람 수 (submitters 규칙) */
+  people: number;
+};
+
+/**
+ * 어느 구역에도 들지 않은 지번의 제출. 구역 밖이라도 의향서를 내는 경우가 있어 따로 센다.
+ * 구역 제출률에는 넣지 않는다 — 분모(소유자)가 구역 것이라 넣으면 비율이 부풀려진다.
+ * 딸림 지번 하나라도 구역 안이면 그 건물은 구역에서 세므로(ownerBasisOf) 여기서 뺀다.
+ */
+export function outsideConsent(
+  consent: ConsentMap,
+  zoned: Set<string>,
+  propsOf: Map<string, ParcelProps>,
+): OutsideConsent {
+  const seen = new Set<string>();
+  const docs: ConsentInfo[] = [];
+  let people = 0;
+  for (const c of Object.values(consent)) {
+    if (seen.has(c.pnu)) continue;
+    seen.add(c.pnu);
+    if (c.submitted <= 0) continue;
+    if (zoned.has(c.pnu) || (c.sharedPnus ?? []).some((p) => zoned.has(p))) continue;
+    docs.push(c);
+    people += submitters(c, propsOf.get(c.pnu));
+  }
+  docs.sort((a, b) => a.pnu.localeCompare(b.pnu));
+  return { docs, people };
+}
+
 /**
  * 제출률(0~100%)에 따른 색.
  *

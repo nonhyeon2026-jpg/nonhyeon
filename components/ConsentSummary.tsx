@@ -8,7 +8,7 @@ import {
   residentialColor,
   summarizeZone,
 } from "@/lib/consent";
-import type { ConsentMap } from "@/lib/consent";
+import type { ConsentMap, OutsideConsent } from "@/lib/consent";
 import { RESIDENTIAL_CLASSES } from "@/lib/zoning";
 import type { ParcelProps, Zone } from "@/lib/types";
 
@@ -31,6 +31,7 @@ export default function ConsentSummary({
   adminMode,
   busy,
   compact = false,
+  outside,
   onSetOwners,
 }: {
   zones: Zone[];
@@ -41,6 +42,8 @@ export default function ConsentSummary({
   busy: boolean;
   /** 좁은 화면용 — 두 비율만 한 줄로 (범례·총 소유자 입력은 넓은 화면에만) */
   compact?: boolean;
+  /** 어느 구역에도 들지 않은 지번의 제출. 구역 제출률에는 넣지 않고 아래에 따로 적는다 */
+  outside?: OutsideConsent;
   onSetOwners: (zoneId: string, owners: number) => void;
 }) {
   const shown = zones.filter((z) => visibleZoneIds.has(z.id));
@@ -62,6 +65,14 @@ export default function ConsentSummary({
             onSetOwners={onSetOwners}
           />
         ),
+      )}
+      {!compact && outside && outside.docs.length > 0 && (
+        <div className="pointer-events-auto rounded-lg border border-violet-500/40 bg-slate-900/90 px-3 py-1.5 text-[11px] text-slate-400 shadow-lg backdrop-blur">
+          구역 밖 제출{" "}
+          <span className="font-semibold text-violet-300">{outside.people.toLocaleString()}명</span> ·{" "}
+          {outside.docs.length}필지
+          <span className="text-slate-600"> — 제출률에 넣지 않음</span>
+        </div>
       )}
     </div>
   );

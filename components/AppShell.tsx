@@ -11,13 +11,14 @@ import ParcelBrief from "./ParcelBrief";
 import ParcelPanel from "./ParcelPanel";
 import SelectionSummary from "./SelectionSummary";
 import OwnerLegend from "./OwnerLegend";
+import OutsideConsentList from "./OutsideConsentList";
 import type { OwnerMark } from "./ownerBadge";
 import { blockConsent, computeBlocks, parcelAnchor } from "@/lib/blocks";
 import BlockLegend from "./BlockLegend";
 import { BLOCK_ROW_KEYS } from "./blockBadge";
 import type { BlockRowKey } from "./blockBadge";
 import type { BlockConsent } from "@/lib/blocks";
-import { applyConsent, removeConsent as dropConsent, ownerBasisOf } from "@/lib/consent";
+import { applyConsent, removeConsent as dropConsent, outsideConsent, ownerBasisOf } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import type {
   ConsentInfo,
@@ -76,6 +77,8 @@ export default function AppShell({
   const [adminMode, setAdminMode] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** 구역 밖 제출 목록 카드. 지도 점선 테두리는 이것과 상관없이 늘 그린다 */
+  const [showOutside, setShowOutside] = useState(false);
   const [activeZoneId, setActiveZoneId] = useState(initialZones[0]?.id ?? "");
   /**
    * 지도에 얹는 숫자 표시. 블록별(면적 동의율)과 소유자(지번별 추정 소유자 수)는 둘 다
@@ -162,6 +165,12 @@ export default function AppShell({
     for (const f of parcels.features) m.set(f.properties.pnu, f.properties);
     return m;
   }, [parcels]);
+
+  /** 어느 구역에도 들지 않은 지번의 제출 — 구역 제출률과 따로 센다 */
+  const outside = useMemo(
+    () => outsideConsent(consent, new Set(zoneOf.keys()), propsOf),
+    [consent, zoneOf, propsOf],
+  );
 
   /** 보이는 구역의 블록. 지적도 모양에만 달려 있어 명부가 바뀌어도 다시 묶지 않는다 */
   const blocks = useMemo(() => {
@@ -458,8 +467,9 @@ ${sample}${more}`)) return;
 
   return (
     <div className="app-viewport flex flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900/80 px-5 py-3 backdrop-blur">
-        <div className="min-w-0">
+      <header className="flex shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900/80 px-3 py-2 backdrop-blur md:px-5 md:py-3">
+        {/* 좁은 화면은 버튼 자리가 모자라 제목을 뺀다 */}
+        <div className="hidden min-w-0 md:block">
           <h1 className="truncate text-base font-semibold tracking-tight">
             논현동 공도복
           </h1>
@@ -524,6 +534,19 @@ ${sample}${more}`)) return;
             }`}
           >
             소유자
+          </button>
+
+          <button
+            onClick={() => setShowOutside((v) => !v)}
+            aria-pressed={showOutside}
+            title="어느 구역에도 들지 않은 지번의 의향서 제출을 모아 봅니다 (지도에는 보라 점선 테두리)"
+            className={`rounded-lg px-3 py-1.5 text-xs transition ${
+              showOutside
+                ? "bg-violet-600 text-white"
+                : "border border-slate-700 text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            구역 밖{outside.docs.length > 0 && ` ${outside.people}`}
           </button>
 
           {adminMode && (
@@ -617,6 +640,9 @@ ${sample}${more}`)) return;
             }`}
           >
             {ownerMarks && <OwnerLegend marks={ownerMarks} compact />}
+            {showOutside && (
+              <OutsideConsentList outside={outside} propsOf={propsOf} onFocus={focusParcel} compact />
+            )}
             {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} compact />}
             <ConsentSummary
               zones={zones}
@@ -695,6 +721,9 @@ ${sample}${more}`)) return;
             */}
             {/* 소유자·블록 표시의 범례. 지도 오른쪽 아래는 이 열이 덮으므로 열 맨 위에 둔다 */}
             {ownerMarks && <OwnerLegend marks={ownerMarks} />}
+            {showOutside && (
+              <OutsideConsentList outside={outside} propsOf={propsOf} onFocus={focusParcel} />
+            )}
             {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} />}
 
             {selected.size === 0 && (
@@ -705,6 +734,7 @@ ${sample}${more}`)) return;
                 propsOf={propsOf}
                 adminMode={adminMode}
                 busy={busy}
+                outside={outside}
                 onSetOwners={setZoneOwners}
               />
             )}

@@ -9,6 +9,7 @@ import {
   unsubmittedStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
+import { isOutside, OUTSIDE_STROKE } from "./outsideStyle";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
 import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W } from "./blockBadge";
@@ -446,6 +447,19 @@ export default function NaverMapView({
           strokeColor: "#94a3b8",
           strokeWeight: 0.6,
           strokeOpacity: 0.45,
+        };
+      }
+
+      // 폴리곤 객체를 재사용하므로 점선은 매번 실선으로 되돌려 둔다
+      style.strokeStyle = "solid";
+      if (consent && isOutside(pnu, consent, zoneOf)) {
+        // 구역 밖 제출 — 채움은 제출률 색 그대로, 테두리만 보라 점선으로 가른다
+        style = {
+          ...style,
+          strokeColor: OUTSIDE_STROKE,
+          strokeWeight: 2,
+          strokeOpacity: 0.95,
+          strokeStyle: "shortdash",
         };
       }
 
