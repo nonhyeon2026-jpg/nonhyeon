@@ -1,5 +1,7 @@
 import { ownerBasisOf, summarizeZone } from "./consent";
 import type { ConsentMap } from "./consent";
+import polygonClipping from "polygon-clipping";
+import type { Polygon } from "polygon-clipping";
 import { pointInRing } from "./geo";
 import type { ParcelFeature, ParcelProps } from "./types";
 
@@ -18,7 +20,7 @@ export type Block = {
   anchor: [number, number];
   /**
    * 블록 바깥 경계. [lng, lat] 로 이뤄진 닫힌 링들(안쪽 구멍 포함). 소유자 동의율이 낮은
-   * 블록에 굵은 테두리를 두르는 데 쓴다. 1m 격자에서 딴 윤곽이라 1m 안팎의 오차가 있다
+   * 블록에 굵은 테두리를 두르는 데 쓴다. 필지를 합친 윤곽이라 실제 경계보다 0.3m 바깥이다
    */
   outline: [number, number][][];
 };
@@ -316,61 +318,85 @@ function rasterize(rings: Pt[][], cell: number): Raster {
   return { inside, w, h, minX, minY, cx, cy };
 }
 
-/** 외곽선을 펼 때 허용하는 오차 (m). 격자 계단을 지우되 블록 모양은 지킨다 */
-const OUTLINE_SIMPLIFY_M = 0.8;
-/** 이보다 짧은 링(m)은 버린다 — 필지 사이에 남은 자잘한 틈 */
-const OUTLINE_MIN_RING_M = 8;
+/**
+ * 외곽선을 만들 때 필지마다 바깥으로 넓히는 폭 (m). 필지끼리 꼭짓점을 공유하지 않아 사이에
+ * 실금이 남는데(TOUCH_M), 그대로 합치면 그 실금이 블록 안쪽 선으로 그려진다
+ */
+const OUTLINE_GROW_M = 0.3;
+/** 합친 뒤 남은 구멍이 이보다 작으면(㎡) 버린다 — 실금이 갇힌 자국. 큰 구멍은 블록 안 남의 땅이다 */
+const OUTLINE_MIN_HOLE_M2 = 30;
+/** 이보다 작은 조각(㎡)은 버린다 */
+const OUTLINE_MIN_PART_M2 = 5;
+/** 넓히며 생긴 거의 일직선인 꼭짓점을 걷어 내는 오차 (m) */
+const OUTLINE_SIMPLIFY_M = 0.15;
+
+/** 닫힌 링의 부호 있는 면적 — 반시계면 양수 */
+function signedArea(r: Pt[]): number {
+  let a = 0;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += r[j][0] * r[i][1] - r[i][0] * r[j][1];
+  return a / 2;
+}
+
+/**
+ * 링을 바깥으로 d 만큼 민다. 꼭짓점마다 앞뒤 변의 바깥 법선을 더한 방향으로 옮긴다.
+ * 뾰족한 꼭짓점이 멀리 튀지 않게 3d 까지만 민다.
+ */
+function grow(ring: Pt[], d: number): Pt[] {
+  const pts = ring.length > 1 && ring[0][0] === ring.at(-1)![0] && ring[0][1] === ring.at(-1)![1]
+    ? ring.slice(0, -1)
+    : ring;
+  const n = pts.length;
+  if (n < 3) return ring;
+  const sign = signedArea(pts) > 0 ? 1 : -1;
+  const normal = (a: Pt, b: Pt): Pt => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy) || 1;
+    return [(sign * dy) / len, (-sign * dx) / len];
+  };
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const n1 = normal(prev, cur);
+    const n2 = normal(cur, next);
+    let mx = n1[0] + n2[0];
+    let my = n1[1] + n2[1];
+    const ml = Math.hypot(mx, my);
+    if (ml < 1e-9) {
+      mx = n1[0];
+      my = n1[1];
+    } else {
+      mx /= ml;
+      my /= ml;
+    }
+    const cos = mx * n1[0] + my * n1[1];
+    const k = Math.min(3 * d, d / Math.max(cos, 1e-6));
+    out.push([cur[0] + mx * k, cur[1] + my * k]);
+  }
+  out.push(out[0]);
+  return out;
+}
 
 /**
  * 블록 바깥 경계 (미터 평면 좌표의 닫힌 링들).
  *
- * 필지끼리 꼭짓점을 공유하지 않아(scripts/gen-zone-outlines.mjs 참고) 변을 상쇄하는 방식은 못 쓴다.
- * 그래서 centerOf 와 같은 격자에 깔고, 안 칸과 바깥 칸 사이의 칸 변을 이어 링을 만든다.
- * 변은 안쪽이 왼편이 되게 방향을 매겨, 꼭짓점마다 나가는 변을 따라가면 링이 닫힌다.
+ * 필지 폴리곤을 그대로 합쳐 지적선을 따라가게 한다 — 격자에서 따면 계단이 져서 선이 지그재그로
+ * 그려졌다. 필지 사이 실금이 블록 안 선으로 남지 않게 필지마다 OUTLINE_GROW_M 씩 넓혀 합치므로,
+ * 외곽선은 실제 경계보다 그만큼 바깥에 놓인다.
  */
-function outlineOf(rings: Pt[][], cell = CELL_M): Pt[][] {
-  const { inside, w, h, minX, minY } = rasterize(rings, cell);
-  const at = (i: number, j: number) => (i >= 0 && j >= 0 && i < w && j < h ? inside[j * w + i] : 0);
-
-  // 칸 꼭짓점 (i, j) 의 번호 → 그 점에서 나가는 변의 끝점들
-  const W = w + 1;
-  const out = new Map<number, number[]>();
-  const edge = (a: number, b: number) => {
-    const l = out.get(a);
-    if (l) l.push(b);
-    else out.set(a, [b]);
-  };
-  for (let j = 0; j < h; j++) {
-    for (let i = 0; i < w; i++) {
-      if (!inside[j * w + i]) continue;
-      const v = (x: number, y: number) => y * W + x;
-      if (!at(i, j - 1)) edge(v(i, j), v(i + 1, j));
-      if (!at(i + 1, j)) edge(v(i + 1, j), v(i + 1, j + 1));
-      if (!at(i, j + 1)) edge(v(i + 1, j + 1), v(i, j + 1));
-      if (!at(i - 1, j)) edge(v(i, j + 1), v(i, j));
-    }
-  }
-
-  const point = (k: number): Pt => [minX + (k % W) * cell, minY + Math.floor(k / W) * cell];
+function outlineOf(rings: Pt[][]): Pt[][] {
+  const grown = rings.map((r) => [grow(r, OUTLINE_GROW_M)] as Polygon);
+  if (!grown.length) return [];
+  const merged = polygonClipping.union(grown[0], ...grown.slice(1));
   const result: Pt[][] = [];
-  for (const startKey of [...out.keys()]) {
-    while (out.get(startKey)?.length) {
-      const ring: Pt[] = [point(startKey)];
-      let k = startKey;
-      for (;;) {
-        const next = out.get(k)!.pop()!;
-        if (!out.get(k)!.length) out.delete(k);
-        k = next;
-        ring.push(point(k));
-        if (k === startKey || !out.get(k)?.length) break;
-      }
-      if (ring.length < 4) continue;
-      const simple = simplify(ring, OUTLINE_SIMPLIFY_M);
-      let len = 0;
-      for (let i = 1; i < simple.length; i++) {
-        len += Math.hypot(simple[i][0] - simple[i - 1][0], simple[i][1] - simple[i - 1][1]);
-      }
-      if (simple.length >= 4 && len >= OUTLINE_MIN_RING_M) result.push(simple);
+  for (const poly of merged) {
+    const [outer, ...holes] = poly as Pt[][];
+    if (Math.abs(signedArea(outer)) < OUTLINE_MIN_PART_M2) continue;
+    result.push(simplify(outer, OUTLINE_SIMPLIFY_M));
+    for (const h of holes) {
+      if (Math.abs(signedArea(h)) >= OUTLINE_MIN_HOLE_M2) result.push(simplify(h, OUTLINE_SIMPLIFY_M));
     }
   }
   return result;
