@@ -6,11 +6,14 @@ const ROW_GAP = 2;
 export const BLOCK_BADGE_W = 40;
 
 /**
- * 소유자 동의율이 이 값(%) 미만인 블록은 빨간 굵은 테두리를 두른다 — 손이 덜 간 블록을
- * 숫자를 하나씩 읽지 않아도 보이게. 소유자가 없는 블록(국공유지만 있는 곳)은 빼낸다.
+ * 소유자 동의율이 이 값(%) 미만인 블록은 검은 굵은 테두리를 두르고 반투명 검정으로 덮는다 —
+ * 손이 덜 간 블록을 숫자를 하나씩 읽지 않아도 보이게. 소유자가 없는 블록(국공유지만 있는 곳)은 빼낸다.
+ * 제출률 색(빨강·연두·초록)과 1·2·3종 색 어느 것과도 겹치지 않게 검정으로 한다.
  */
 export const LOW_OWNER_RATIO = 20;
-export const LOW_BLOCK_STROKE = "#ef4444";
+export const LOW_BLOCK_STROKE = "#000000";
+/** 덮개 검정의 불투명도 — 밑의 필지 색이 비쳐 보일 만큼만 */
+export const LOW_BLOCK_FILL_OPACITY = 0.35;
 export const isLowBlock = (b: BlockConsent) => b.owners > 0 && b.ownerRatio < LOW_OWNER_RATIO;
 /** 고른 줄 수에 따른 표시 높이 */
 export const blockBadgeH = (rows: number) => ROW_H * rows + ROW_GAP * Math.max(0, rows - 1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { BLOCK_BADGE_ROWS, LOW_BLOCK_STROKE, LOW_OWNER_RATIO } from "./blockBadge";
+import { BLOCK_BADGE_ROWS, LOW_BLOCK_FILL_OPACITY, LOW_BLOCK_STROKE, LOW_OWNER_RATIO } from "./blockBadge";
 import type { BlockRowKey } from "./blockBadge";
 
 /**
@@ -52,7 +52,10 @@ export default function BlockLegend({
         {BLOCK_BADGE_ROWS.map((r) => `${r.label} ${r.fullText}`).join(" · ")}
       </p>
       <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-400">
-        <span className="h-2.5 w-4 shrink-0 rounded-sm border-[3px]" style={{ borderColor: LOW_BLOCK_STROKE }} />
+        <span
+          className="h-2.5 w-4 shrink-0 rounded-sm border-[3px] ring-1 ring-slate-400"
+          style={{ borderColor: LOW_BLOCK_STROKE, background: `rgba(0,0,0,${LOW_BLOCK_FILL_OPACITY})` }}
+        />
         소유자 동의율 {LOW_OWNER_RATIO}% 미만 블록
       </div>
     </div>

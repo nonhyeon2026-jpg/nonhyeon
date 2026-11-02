@@ -12,7 +12,7 @@ import type { ConsentMap } from "@/lib/consent";
 import { isOutside, OUTSIDE_STROKE } from "./outsideStyle";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
-import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W, isLowBlock, LOW_BLOCK_STROKE } from "./blockBadge";
+import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W, isLowBlock, LOW_BLOCK_FILL_OPACITY, LOW_BLOCK_STROKE } from "./blockBadge";
 import type { BlockRowKey } from "./blockBadge";
 import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
 import type { OwnerMark } from "./ownerBadge";
@@ -154,7 +154,7 @@ export default function NaverMapView({
   blockClickRef.current = onBlockClick;
   /** 블록 동의율 표시 */
   const blockMarkersRef = useRef<any[]>([]);
-  /** 소유자 동의율이 낮은 블록의 빨간 테두리 */
+  /** 소유자 동의율이 낮은 블록의 검은 테두리와 덮개 */
   const blockOutlinesRef = useRef<any[]>([]);
   const ownerClickRef = useRef(onOwnerClick);
   ownerClickRef.current = onOwnerClick;
@@ -530,7 +530,8 @@ export default function NaverMapView({
         new naver.maps.Polygon({
           map: mapRef.current,
           paths: b.outline.map((r) => r.map(([lng, lat]) => new naver.maps.LatLng(lat, shiftLng(lng)))),
-          fillOpacity: 0,
+          fillColor: LOW_BLOCK_STROKE,
+          fillOpacity: LOW_BLOCK_FILL_OPACITY,
           strokeColor: LOW_BLOCK_STROKE,
           strokeWeight: 4,
           strokeOpacity: 0.95,
