@@ -12,7 +12,7 @@ import type { ConsentMap } from "@/lib/consent";
 import { isOutside, OUTSIDE_STROKE } from "./outsideStyle";
 import type { BlockConsent } from "@/lib/blocks";
 import { ringsIntersect, shiftLng } from "@/lib/geo";
-import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W } from "./blockBadge";
+import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W, isLowBlock, LOW_BLOCK_STROKE } from "./blockBadge";
 import type { BlockRowKey } from "./blockBadge";
 import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
 import type { OwnerMark } from "./ownerBadge";
@@ -154,6 +154,8 @@ export default function NaverMapView({
   blockClickRef.current = onBlockClick;
   /** 블록 동의율 표시 */
   const blockMarkersRef = useRef<any[]>([]);
+  /** 소유자 동의율이 낮은 블록의 빨간 테두리 */
+  const blockOutlinesRef = useRef<any[]>([]);
   const ownerClickRef = useRef(onOwnerClick);
   ownerClickRef.current = onOwnerClick;
   /** pnu → 소유자 수 표시. 화면에 들어올 때만 지도에 붙인다 */
@@ -521,9 +523,26 @@ export default function NaverMapView({
       naver.maps.Event.addListener(marker, "click", () => blockClickRef.current(b));
       return marker;
     });
+    // 필지 폴리곤(zIndex 최대 100000)보다 위, 블록 표시보다 아래
+    for (const o of blockOutlinesRef.current) o.setMap(null);
+    blockOutlinesRef.current = (blocks ?? []).filter(isLowBlock).map(
+      (b) =>
+        new naver.maps.Polygon({
+          map: mapRef.current,
+          paths: b.outline.map((r) => r.map(([lng, lat]) => new naver.maps.LatLng(lat, shiftLng(lng)))),
+          fillOpacity: 0,
+          strokeColor: LOW_BLOCK_STROKE,
+          strokeWeight: 4,
+          strokeOpacity: 0.95,
+          clickable: false,
+          zIndex: 120000,
+        }),
+    );
     return () => {
       for (const m of blockMarkersRef.current) m.setMap(null);
       blockMarkersRef.current = [];
+      for (const o of blockOutlinesRef.current) o.setMap(null);
+      blockOutlinesRef.current = [];
     };
   }, [ready, blocks, blockRows]);
 

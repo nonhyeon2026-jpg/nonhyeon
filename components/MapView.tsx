@@ -5,7 +5,7 @@ import { MapContainer, Marker, Polygon, TileLayer, Tooltip, useMap } from "react
 import { divIcon } from "leaflet";
 import type { LatLngExpression } from "leaflet";
 import type { BlockConsent } from "@/lib/blocks";
-import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W } from "./blockBadge";
+import { blockBadgeH, blockBadgeHtml, BLOCK_BADGE_W, isLowBlock, LOW_BLOCK_STROKE } from "./blockBadge";
 import type { BlockRowKey } from "./blockBadge";
 import { OWNER_BADGE_H, ownerBadgeHtml, ownerBadgeWidth } from "./ownerBadge";
 import type { OwnerMark } from "./ownerBadge";
@@ -234,6 +234,16 @@ export default function MapView({
           </Polygon>
         );
       })}
+
+      {/* 소유자 동의율이 낮은 블록은 빨간 굵은 테두리 */}
+      {blocks?.filter(isLowBlock).map((b) => (
+        <Polygon
+          key={`low-${b.id}`}
+          positions={b.outline.map((r) => r.map(([lng, lat]) => [lat, shiftLng(lng)] as LatLngExpression))}
+          pathOptions={{ color: LOW_BLOCK_STROKE, weight: 4, opacity: 0.95, fill: false }}
+          interactive={false}
+        />
+      ))}
 
       {blocks?.map((b) => (
         <Marker

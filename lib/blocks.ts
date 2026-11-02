@@ -16,6 +16,11 @@ export type Block = {
   pnus: string[];
   /** 동의율 표시를 놓을 자리 [lat, lng] — 블록 모양의 한가운데 */
   anchor: [number, number];
+  /**
+   * 블록 바깥 경계. [lng, lat] 로 이뤄진 닫힌 링들(안쪽 구멍 포함). 소유자 동의율이 낮은
+   * 블록에 굵은 테두리를 두르는 데 쓴다. 1m 격자에서 딴 윤곽이라 1m 안팎의 오차가 있다
+   */
+  outline: [number, number][][];
 };
 
 /** 블록을 가르는 지목 */
@@ -119,11 +124,15 @@ export function computeBlocks(features: ParcelFeature[], zonePnus: Set<string>):
   const blocks: Block[] = [];
   for (const idx of groups.values()) {
     const props = idx.map((i) => items[i].properties);
-    const [x, y] = centerOf(idx.map((i) => rings[i]));
+    const blockRings = idx.map((i) => rings[i]);
+    const [x, y] = centerOf(blockRings);
     blocks.push({
       id: props.map((p) => p.pnu).sort()[0],
       pnus: props.map((p) => p.pnu),
       anchor: [lat0 + y / M_PER_DEG_LAT, lng0 + x / M_PER_DEG_LNG],
+      outline: outlineOf(blockRings).map((r) =>
+        r.map(([px, py]) => [lng0 + px / M_PER_DEG_LNG, lat0 + py / M_PER_DEG_LAT] as [number, number]),
+      ),
     });
   }
   return blocks;
@@ -167,63 +176,7 @@ const ANCHOR_MAX_CELLS = 4000;
  * 길쭉한 블록은 깊이가 같은 칸이 한 줄로 늘어서므로 그중 가운데로 온다.
  */
 function centerOf(rings: Pt[][], cell = CELL_M): Pt {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const r of rings) {
-    for (const [x, y] of r) {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-  }
-  // 바깥 테두리에 빈 칸을 한 줄씩 둬야 가장자리 칸의 거리가 바르게 잡힌다
-  minX -= cell;
-  minY -= cell;
-  const w = Math.ceil((maxX - minX) / cell) + 2;
-  const h = Math.ceil((maxY - minY) / cell) + 2;
-  const cx = (i: number) => minX + (i + 0.5) * cell;
-  const cy = (j: number) => minY + (j + 0.5) * cell;
-
-  // 1) 칸 중심이 어느 필지 안에 들면 블록 안
-  let inside = new Uint8Array(w * h);
-  for (const r of rings) {
-    let rx0 = Infinity;
-    let rx1 = -Infinity;
-    let ry0 = Infinity;
-    let ry1 = -Infinity;
-    for (const [x, y] of r) {
-      if (x < rx0) rx0 = x;
-      if (x > rx1) rx1 = x;
-      if (y < ry0) ry0 = y;
-      if (y > ry1) ry1 = y;
-    }
-    const i0 = Math.max(0, Math.floor((rx0 - minX) / cell));
-    const i1 = Math.min(w - 1, Math.ceil((rx1 - minX) / cell));
-    const j0 = Math.max(0, Math.floor((ry0 - minY) / cell));
-    const j1 = Math.min(h - 1, Math.ceil((ry1 - minY) / cell));
-    for (let j = j0; j <= j1; j++) {
-      for (let i = i0; i <= i1; i++) {
-        if (!inside[j * w + i] && pointInRing(r, cx(i), cy(j))) inside[j * w + i] = 1;
-      }
-    }
-  }
-
-  // 2) 필지 사이 지적선의 실금이 바깥으로 잡히지 않게 한 칸 메운다 (팽창 → 침식)
-  const morph = (src: Uint8Array, grow: boolean) => {
-    const out = new Uint8Array(w * h);
-    for (let j = 1; j < h - 1; j++) {
-      for (let i = 1; i < w - 1; i++) {
-        const k = j * w + i;
-        const n = [k, k - 1, k + 1, k - w, k + w].map((q) => src[q]);
-        out[k] = grow ? (n.some(Boolean) ? 1 : 0) : n.every(Boolean) ? 1 : 0;
-      }
-    }
-    return out;
-  };
-  inside = morph(morph(inside, true), false);
+  const { inside, w, h, cx, cy } = rasterize(rings, cell);
 
   // 3) 바깥까지의 거리 (체스판 거리, 앞뒤 두 번 훑기)
   const dist = new Float32Array(w * h);
@@ -286,6 +239,179 @@ function centerOf(rings: Pt[][], cell = CELL_M): Pt {
     }
   }
   return pick;
+}
+
+type Raster = {
+  inside: Uint8Array;
+  w: number;
+  h: number;
+  minX: number;
+  minY: number;
+  cx: (i: number) => number;
+  cy: (j: number) => number;
+};
+
+/**
+ * 필지 링들을 격자에 깐다 — 칸 중심이 어느 필지 안에 들면 1. 바깥 테두리에는 빈 칸을
+ * 한 줄씩 남긴다. 필지 사이 지적선의 실금은 한 칸 메운다.
+ */
+function rasterize(rings: Pt[][], cell: number): Raster {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const r of rings) {
+    for (const [x, y] of r) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  // 바깥 테두리에 빈 칸을 한 줄씩 둬야 가장자리 칸의 거리가 바르게 잡힌다
+  minX -= cell;
+  minY -= cell;
+  const w = Math.ceil((maxX - minX) / cell) + 2;
+  const h = Math.ceil((maxY - minY) / cell) + 2;
+  const cx = (i: number) => minX + (i + 0.5) * cell;
+  const cy = (j: number) => minY + (j + 0.5) * cell;
+
+  // 1) 칸 중심이 어느 필지 안에 들면 블록 안
+  let inside = new Uint8Array(w * h);
+  for (const r of rings) {
+    let rx0 = Infinity;
+    let rx1 = -Infinity;
+    let ry0 = Infinity;
+    let ry1 = -Infinity;
+    for (const [x, y] of r) {
+      if (x < rx0) rx0 = x;
+      if (x > rx1) rx1 = x;
+      if (y < ry0) ry0 = y;
+      if (y > ry1) ry1 = y;
+    }
+    const i0 = Math.max(0, Math.floor((rx0 - minX) / cell));
+    const i1 = Math.min(w - 1, Math.ceil((rx1 - minX) / cell));
+    const j0 = Math.max(0, Math.floor((ry0 - minY) / cell));
+    const j1 = Math.min(h - 1, Math.ceil((ry1 - minY) / cell));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (!inside[j * w + i] && pointInRing(r, cx(i), cy(j))) inside[j * w + i] = 1;
+      }
+    }
+  }
+
+  // 2) 필지 사이 지적선의 실금이 바깥으로 잡히지 않게 한 칸 메운다 (팽창 → 침식)
+  const morph = (src: Uint8Array, grow: boolean) => {
+    const out = new Uint8Array(w * h);
+    for (let j = 1; j < h - 1; j++) {
+      for (let i = 1; i < w - 1; i++) {
+        const k = j * w + i;
+        const n = [k, k - 1, k + 1, k - w, k + w].map((q) => src[q]);
+        out[k] = grow ? (n.some(Boolean) ? 1 : 0) : n.every(Boolean) ? 1 : 0;
+      }
+    }
+    return out;
+  };
+  inside = morph(morph(inside, true), false);
+  return { inside, w, h, minX, minY, cx, cy };
+}
+
+/** 외곽선을 펼 때 허용하는 오차 (m). 격자 계단을 지우되 블록 모양은 지킨다 */
+const OUTLINE_SIMPLIFY_M = 0.8;
+/** 이보다 짧은 링(m)은 버린다 — 필지 사이에 남은 자잘한 틈 */
+const OUTLINE_MIN_RING_M = 8;
+
+/**
+ * 블록 바깥 경계 (미터 평면 좌표의 닫힌 링들).
+ *
+ * 필지끼리 꼭짓점을 공유하지 않아(scripts/gen-zone-outlines.mjs 참고) 변을 상쇄하는 방식은 못 쓴다.
+ * 그래서 centerOf 와 같은 격자에 깔고, 안 칸과 바깥 칸 사이의 칸 변을 이어 링을 만든다.
+ * 변은 안쪽이 왼편이 되게 방향을 매겨, 꼭짓점마다 나가는 변을 따라가면 링이 닫힌다.
+ */
+function outlineOf(rings: Pt[][], cell = CELL_M): Pt[][] {
+  const { inside, w, h, minX, minY } = rasterize(rings, cell);
+  const at = (i: number, j: number) => (i >= 0 && j >= 0 && i < w && j < h ? inside[j * w + i] : 0);
+
+  // 칸 꼭짓점 (i, j) 의 번호 → 그 점에서 나가는 변의 끝점들
+  const W = w + 1;
+  const out = new Map<number, number[]>();
+  const edge = (a: number, b: number) => {
+    const l = out.get(a);
+    if (l) l.push(b);
+    else out.set(a, [b]);
+  };
+  for (let j = 0; j < h; j++) {
+    for (let i = 0; i < w; i++) {
+      if (!inside[j * w + i]) continue;
+      const v = (x: number, y: number) => y * W + x;
+      if (!at(i, j - 1)) edge(v(i, j), v(i + 1, j));
+      if (!at(i + 1, j)) edge(v(i + 1, j), v(i + 1, j + 1));
+      if (!at(i, j + 1)) edge(v(i + 1, j + 1), v(i, j + 1));
+      if (!at(i - 1, j)) edge(v(i, j + 1), v(i, j));
+    }
+  }
+
+  const point = (k: number): Pt => [minX + (k % W) * cell, minY + Math.floor(k / W) * cell];
+  const result: Pt[][] = [];
+  for (const startKey of [...out.keys()]) {
+    while (out.get(startKey)?.length) {
+      const ring: Pt[] = [point(startKey)];
+      let k = startKey;
+      for (;;) {
+        const next = out.get(k)!.pop()!;
+        if (!out.get(k)!.length) out.delete(k);
+        k = next;
+        ring.push(point(k));
+        if (k === startKey || !out.get(k)?.length) break;
+      }
+      if (ring.length < 4) continue;
+      const simple = simplify(ring, OUTLINE_SIMPLIFY_M);
+      let len = 0;
+      for (let i = 1; i < simple.length; i++) {
+        len += Math.hypot(simple[i][0] - simple[i - 1][0], simple[i][1] - simple[i - 1][1]);
+      }
+      if (simple.length >= 4 && len >= OUTLINE_MIN_RING_M) result.push(simple);
+    }
+  }
+  return result;
+}
+
+/** 닫힌 링을 Douglas–Peucker 로 편다. 첫 점과 끝 점은 같게 남긴다 */
+function simplify(ring: Pt[], tol: number): Pt[] {
+  const tolSq = tol * tol;
+  const keep = new Uint8Array(ring.length);
+  keep[0] = keep[ring.length - 1] = 1;
+  // 닫힌 링은 첫 점에서 가장 먼 점으로 둘로 나눠야 한쪽으로 쏠리지 않는다
+  let far = 0;
+  let farD = -1;
+  for (let i = 1; i < ring.length - 1; i++) {
+    const d = (ring[i][0] - ring[0][0]) ** 2 + (ring[i][1] - ring[0][1]) ** 2;
+    if (d > farD) {
+      farD = d;
+      far = i;
+    }
+  }
+  keep[far] = 1;
+  const stack: [number, number][] = [
+    [0, far],
+    [far, ring.length - 1],
+  ];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    let worst = -1;
+    let worstD = tolSq;
+    for (let i = a + 1; i < b; i++) {
+      const d = distSqToSegment(ring[i], ring[a], ring[b]);
+      if (d > worstD) {
+        worstD = d;
+        worst = i;
+      }
+    }
+    if (worst < 0) continue;
+    keep[worst] = 1;
+    stack.push([a, worst], [worst, b]);
+  }
+  return ring.filter((_, i) => keep[i]);
 }
 
 export type BlockConsent = Block & {

@@ -4,6 +4,14 @@ import type { BlockConsent } from "@/lib/blocks";
 const ROW_H = 16;
 const ROW_GAP = 2;
 export const BLOCK_BADGE_W = 40;
+
+/**
+ * 소유자 동의율이 이 값(%) 미만인 블록은 빨간 굵은 테두리를 두른다 — 손이 덜 간 블록을
+ * 숫자를 하나씩 읽지 않아도 보이게. 소유자가 없는 블록(국공유지만 있는 곳)은 빼낸다.
+ */
+export const LOW_OWNER_RATIO = 15;
+export const LOW_BLOCK_STROKE = "#ef4444";
+export const isLowBlock = (b: BlockConsent) => b.owners > 0 && b.ownerRatio < LOW_OWNER_RATIO;
 /** 고른 줄 수에 따른 표시 높이 */
 export const blockBadgeH = (rows: number) => ROW_H * rows + ROW_GAP * Math.max(0, rows - 1);
 
