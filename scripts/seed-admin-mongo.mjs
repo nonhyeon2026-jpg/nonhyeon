@@ -1,13 +1,14 @@
 /**
- * 관리자 계정 → MongoDB Atlas (nonhyun.admins)
+ * 관리자번호(4자리) → MongoDB Atlas (nonhyun.admins)
  *
- *   ADMIN_ID=아이디 ADMIN_PW=비밀번호 npm run seed:admin
+ *   ADMIN_PIN=1234 npm run seed:admin
  *
- * 계정 정보는 반드시 환경변수로 넘긴다 — 소스에 비밀번호를 남기지 않기 위해서다.
- * PowerShell: $env:ADMIN_ID="..."; $env:ADMIN_PW="..."; npm run seed:admin
+ * 번호는 반드시 환경변수로 넘긴다 — 소스에 번호를 남기지 않기 위해서다.
+ * PowerShell: $env:ADMIN_PIN="...."; npm run seed:admin
  *
- * 비밀번호는 평문으로 두지 않고 scrypt 해시로 저장한다.
- * 로그인 쿠키에 서명할 비밀키(sessionSecret)도 같은 컬렉션에 한 번만 만들어 둔다.
+ * 번호는 평문으로 두지 않고 scrypt 해시로 저장한다. 번호를 바꾸면 틀린 횟수 잠금도 함께 푼다.
+ * 쿠키에 서명할 비밀키(sessionSecret)도 같은 컬렉션에 한 번만 만들어 둔다.
+ * 예전 아이디·비밀번호 계정(user:*)은 더 쓰지 않으므로 지운다.
  */
 import { readFileSync } from "node:fs";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -20,12 +21,11 @@ const CREDENTIALS = resolve(ROOT, "atlas-credentials.env");
 const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 const COLLECTION = "admins";
 
-const ADMIN_ID = process.env.ADMIN_ID;
-const ADMIN_PW = process.env.ADMIN_PW;
+const ADMIN_PIN = process.env.ADMIN_PIN;
 
-if (!ADMIN_ID || !ADMIN_PW) {
-  console.error("ADMIN_ID 와 ADMIN_PW 환경변수가 필요합니다.");
-  console.error('  PowerShell: $env:ADMIN_ID="아이디"; $env:ADMIN_PW="비밀번호"; npm run seed:admin');
+if (!ADMIN_PIN || !/^\d{4}$/.test(ADMIN_PIN)) {
+  console.error("ADMIN_PIN 환경변수에 숫자 4자리가 필요합니다.");
+  console.error('  PowerShell: $env:ADMIN_PIN="1234"; npm run seed:admin');
   process.exit(1);
 }
 
@@ -59,7 +59,7 @@ function uri() {
 }
 
 const salt = randomBytes(16).toString("hex");
-const hash = scryptSync(ADMIN_PW, salt, 64).toString("hex");
+const hash = scryptSync(ADMIN_PIN, salt, 64).toString("hex");
 
 const client = new MongoClient(uri(), { serverSelectionTimeoutMS: 15000 });
 
@@ -68,10 +68,12 @@ try {
   const col = client.db(DB_NAME).collection(COLLECTION);
 
   await col.replaceOne(
-    { _id: `user:${ADMIN_ID}` },
-    { _id: `user:${ADMIN_ID}`, kind: "user", username: ADMIN_ID, algo: "scrypt", salt, hash },
+    { _id: "meta:pin" },
+    { _id: "meta:pin", kind: "pin", algo: "scrypt", salt, hash },
     { upsert: true },
   );
+  const { deletedCount: unlocked } = await col.deleteMany({ _id: /^fail:/ });
+  const { deletedCount: oldUsers } = await col.deleteMany({ _id: /^user:/ });
 
   // 쿠키 서명키는 한 번 만들면 그대로 둔다 — 바뀌면 로그인된 사람이 전부 튕긴다
   const existing = await col.findOne({ _id: "meta:session" });
@@ -84,11 +86,12 @@ try {
   }
 
   // 방금 넣은 해시로 실제 로그인이 되는지 확인한다
-  const saved = await col.findOne({ _id: `user:${ADMIN_ID}` });
-  const check = scryptSync(ADMIN_PW, saved.salt, 64);
+  const saved = await col.findOne({ _id: "meta:pin" });
+  const check = scryptSync(ADMIN_PIN, saved.salt, 64);
   const ok = timingSafeEqual(check, Buffer.from(saved.hash, "hex"));
 
-  console.log(`${DB_NAME}.${COLLECTION}: 계정 "${ADMIN_ID}" 저장 · 검증 ${ok ? "성공" : "실패"}`);
+  console.log(`${DB_NAME}.${COLLECTION}: 관리자번호 저장 · 검증 ${ok ? "성공" : "실패"}`);
+  console.log(`잠금 ${unlocked}건 풂 · 예전 아이디 계정 ${oldUsers}개 지움`);
   console.log(`쿠키 서명키 ${existing ? "유지" : "생성"}`);
 } finally {
   await client.close();

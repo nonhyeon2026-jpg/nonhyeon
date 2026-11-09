@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
+const PARCELS_PATH = resolve(ROOT, "data/parcels.json");
 const ZONES_PATH = resolve(ROOT, "data/zones.json");
 const OUT_PATH = resolve(ROOT, "data/zone-outlines.json");
 

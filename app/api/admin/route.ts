@@ -1,41 +1,39 @@
 import { NextResponse } from "next/server";
-import { ADMIN_COOKIE, cookieOptions, currentAdmin, login } from "@/lib/admin";
+import { ADMIN_COOKIE, cookieOptions, currentAdmin, loginPin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
-/** 지금 로그인 상태인지 */
+/** 지금 들어와 있는 상태인지 */
 export async function GET() {
   const admin = await currentAdmin();
   return NextResponse.json({ admin });
 }
 
-/** 로그인 */
+/** 관리자번호로 들어가기 */
 export async function POST(req: Request) {
-  let input: { username?: string; password?: string };
+  let input: { pin?: string };
   try {
     input = await req.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청 본문" }, { status: 400 });
   }
 
-  const username = String(input.username ?? "").trim();
-  const password = String(input.password ?? "");
-  if (!username || !password) {
-    return NextResponse.json({ error: "아이디와 비밀번호를 입력하세요" }, { status: 400 });
+  const pin = String(input.pin ?? "").trim();
+  if (!/^\d{4}$/.test(pin)) {
+    return NextResponse.json({ error: "관리자번호 4자리를 넣어 주세요" }, { status: 400 });
   }
 
-  const token = await login(username, password);
-  if (!token) {
-    // 아이디가 틀렸는지 비밀번호가 틀렸는지는 알려주지 않는다
-    return NextResponse.json({ error: "아이디 또는 비밀번호가 맞지 않습니다" }, { status: 401 });
+  const result = await loginPin(pin);
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  const res = NextResponse.json({ admin: username });
-  res.cookies.set(ADMIN_COOKIE, token, cookieOptions);
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set(ADMIN_COOKIE, result.token, cookieOptions);
   return res;
 }
 
-/** 로그아웃 */
+/** 나가기 */
 export async function DELETE() {
   const res = NextResponse.json({ admin: null });
   res.cookies.set(ADMIN_COOKIE, "", { ...cookieOptions, maxAge: 0 });

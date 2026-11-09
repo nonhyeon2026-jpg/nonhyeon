@@ -273,7 +273,7 @@ parcels.sort((a, b) => a.properties.bonbun - b.properties.bonbun || a.properties
 mkdirSync(resolve(ROOT, "data"), { recursive: true });
 mkdirSync(resolve(ROOT, "public"), { recursive: true });
 writeFileSync(
-  resolve(ROOT, "public/parcels.json"),
+  resolve(ROOT, "data/parcels.json"),
   JSON.stringify(
     {
       type: "FeatureCollection",

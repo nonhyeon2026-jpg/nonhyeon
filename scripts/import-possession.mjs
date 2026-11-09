@@ -1,5 +1,5 @@
 /**
- * VWorld 토지소유정보(getPossessionAttr) → public/parcels.json 의 building.owners · land 병합.
+ * VWorld 토지소유정보(getPossessionAttr) → data/parcels.json 의 building.owners · land 병합.
  *
  *   PowerShell: $env:VWORLD_KEY="키"; $env:VWORLD_DOMAIN="도메인"; npm run import:possession
  *
@@ -20,7 +20,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
+const PARCELS_PATH = resolve(ROOT, "data/parcels.json");
 const CACHE_PATH = resolve(ROOT, "data/possession-cache.json");
 /**
  * 토지소유정보 기준월 뒤에 묶인 호가 팔린 필지 (국토부 실거래가로 확인).

@@ -8,13 +8,15 @@ export const dynamic = "force-dynamic";
 
 const fail = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
-/** 명부를 고치는 요청은 로그인된 관리자만. 통과하면 변경 기록에 남길 아이디를 돌려준다 */
+/** 명부는 관리자번호로 들어온 사람만 보고 고친다. 통과하면 변경 기록에 남길 이름을 돌려준다 */
 async function requireAdmin(): Promise<{ user: string } | { denied: NextResponse }> {
   const user = await currentAdmin();
-  return user ? { user } : { denied: fail("관리자 로그인이 필요합니다", 401) };
+  return user ? { user } : { denied: fail("관리자번호를 넣고 들어와야 합니다", 401) };
 }
 
 export async function GET() {
+  const auth = await requireAdmin();
+  if ("denied" in auth) return auth.denied;
   try {
     return NextResponse.json(await readConsent());
   } catch (e) {

@@ -5,9 +5,9 @@ import type { Zone, ZoneMutation } from "./types";
 /**
  * 구역 정보는 MongoDB(nonhyun.zones)에 있다. 필지 편입/제외가 곧 DB 갱신이다.
  *
- * 필지 데이터(public/parcels.json)는 서버를 거치지 않는다.
+ * 필지 데이터(data/parcels.json)는 여기서 읽지 않는다.
  * 2MB가 넘어 서버 렌더링 페이로드에 실으면 초기 로딩이 크게 느려지므로
- * 정적 파일로 두고 브라우저가 직접 받아 캐시한다.
+ * 브라우저가 /api/parcels 로 따로 받아 캐시한다.
  */
 
 /**

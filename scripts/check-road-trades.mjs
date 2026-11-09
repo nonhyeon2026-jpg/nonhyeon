@@ -94,7 +94,7 @@ fs.writeFileSync(CACHE, JSON.stringify(cache));
 console.error(`받은 달 ${fetched}개 · 캐시 ${Object.keys(cache).length}개월`);
 
 // ── 구역 안 도로 ───────────────────────────────────────────────────────────
-const parcels = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "parcels.json"), "utf8")).features;
+const parcels = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "parcels.json"), "utf8")).features;
 const outline = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "zone-outlines.json"), "utf8"))[ZONE_ID];
 
 function inRing([x, y], ring) {

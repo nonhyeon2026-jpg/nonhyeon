@@ -21,7 +21,7 @@ import { readRoster } from "./roster.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const XLSX_PATH = resolve(ROOT, process.argv[2] ?? "nonhyun.xlsx");
-const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
+const PARCELS_PATH = resolve(ROOT, "data/parcels.json");
 const CACHE_PATH = resolve(ROOT, "data/bldrgst-cache.json");
 const OUT_PATH = resolve(ROOT, "lib/consent.json");
 

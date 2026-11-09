@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Basemap } from "./MapView";
-import AdminLogin from "./AdminLogin";
 import HistoryPanel from "./HistoryPanel";
 import ConsentSummary from "./ConsentSummary";
 import ParcelActions from "./ParcelActions";
@@ -74,8 +73,11 @@ export default function AppShell({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   /** 지도에서 영역을 찍는 중 — 그동안은 지도를 덮는 카드를 치운다 */
   const [drawing, setDrawing] = useState(false);
+  /**
+   * 편집 모드. 대문에서 관리자번호로 들어왔으니 권한은 이미 있다 — 이건 실수로 필지를 빼지 않도록
+   * 구역·명부를 고치는 단추를 켜 둘지 말지만 정한다.
+   */
   const [adminMode, setAdminMode] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   /** 구역 밖 제출 목록 카드. 지도 점선 테두리는 이것과 상관없이 늘 그린다 */
   const [showOutside, setShowOutside] = useState(false);
@@ -116,28 +118,16 @@ export default function AppShell({
 
   const useNaver = Boolean(naverClientId);
 
-  /* 필지는 정적 파일로 받는다 (브라우저 캐시 이용) */
+  /* 필지는 따로 받는다 (브라우저 캐시 이용) */
   useEffect(() => {
     let cancelled = false;
-    fetch("/parcels.json")
+    fetch("/api/parcels")
       .then((r) => {
         if (!r.ok) throw new Error(`필지 데이터를 불러오지 못했습니다 (HTTP ${r.status})`);
         return r.json();
       })
       .then((d: ParcelCollection) => !cancelled && setParcels(d))
       .catch((e) => !cancelled && setParcelError((e as Error).message));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  /* 새로고침해도 로그인 상태(쿠키)를 이어받는다 */
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/admin")
-      .then((r) => r.json())
-      .then((d: { admin: string | null }) => !cancelled && setAdminMode(Boolean(d.admin)))
-      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -446,16 +436,17 @@ ${sample}${more}`)) return;
     [flash],
   );
 
-  /** 관리자 아이콘: 꺼져 있으면 로그인 창을, 켜져 있으면 로그아웃 */
-  const toggleAdmin = useCallback(async () => {
-    if (!adminMode) {
-      setLoginOpen(true);
-      return;
-    }
-    await fetch("/api/admin", { method: "DELETE" }).catch(() => {});
-    setAdminMode(false);
-    flash("관리자 모드를 껐습니다.");
+  /** 방패 아이콘: 편집 모드를 켜고 끈다 */
+  const toggleAdmin = useCallback(() => {
+    flash(adminMode ? "편집 모드를 껐습니다." : "편집 모드를 켰습니다.");
+    setAdminMode((v) => !v);
   }, [adminMode, flash]);
+
+  /** 나가기 — 쿠키를 지우고 대문으로 돌아간다 */
+  const leave = useCallback(async () => {
+    await fetch("/api/admin", { method: "DELETE" }).catch(() => {});
+    window.location.reload();
+  }, []);
 
   const focusParcel = useCallback(
     (props: ParcelProps, additive = false) => {
@@ -561,8 +552,8 @@ ${sample}${more}`)) return;
 
           <button
             onClick={toggleAdmin}
-            title={adminMode ? "관리자 모드 끄기" : "관리자 모드 켜기"}
-            aria-label="관리자 모드"
+            title={adminMode ? "편집 모드 끄기" : "편집 모드 켜기 — 구역·명부를 고치는 단추가 나옵니다"}
+            aria-label="편집 모드"
             aria-pressed={adminMode}
             className={`rounded-lg p-1.5 transition ${
               adminMode
@@ -582,6 +573,28 @@ ${sample}${more}`)) return;
             >
               <path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z" />
               <path d="M9 12l2 2 4-4" />
+            </svg>
+          </button>
+
+          <button
+            onClick={leave}
+            title="나가기 — 다시 들어오려면 관리자번호를 넣어야 합니다"
+            aria-label="나가기"
+            className="rounded-lg border border-slate-700 p-1.5 text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+          >
+            {/* 문 밖으로 나가는 화살표 */}
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <path d="M16 17l5-5-5-5" />
+              <path d="M21 12H9" />
             </svg>
           </button>
         </div>
@@ -772,16 +785,6 @@ ${sample}${more}`)) return;
         />
       )}
 
-      {loginOpen && (
-        <AdminLogin
-          onClose={() => setLoginOpen(false)}
-          onSuccess={() => {
-            setLoginOpen(false);
-            setAdminMode(true);
-            flash("관리자 모드를 켰습니다.");
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * 국토교통부 건축물대장 표제부(getBrTitleInfo) → public/parcels.json 병합.
+ * 국토교통부 건축물대장 표제부(getBrTitleInfo) → data/parcels.json 병합.
  *
  *   BLDRGST_KEY=... npm run import:bldrgst
  *
@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE_PATH = resolve(ROOT, "data/bldrgst-cache.json");
-const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
+const PARCELS_PATH = resolve(ROOT, "data/parcels.json");
 
 const KEY = process.env.BLDRGST_KEY;
 const SIGUNGU = "11680"; // 강남구

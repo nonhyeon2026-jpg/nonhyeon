@@ -19,7 +19,7 @@ const SEED_RULES = {
   "nonhyun-3": { minLat: 37.5122, maxLat: 37.5152, minLng: 127.0206, maxLng: 127.0246 },
 };
 
-const parcels = JSON.parse(readFileSync(resolve(ROOT, "public/parcels.json"), "utf8"));
+const parcels = JSON.parse(readFileSync(resolve(ROOT, "data/parcels.json"), "utf8"));
 const zones = JSON.parse(readFileSync(resolve(ROOT, "data/zones.json"), "utf8"));
 
 const known = new Set(parcels.features.map((f) => f.properties.pnu));

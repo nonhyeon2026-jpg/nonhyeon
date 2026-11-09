@@ -131,10 +131,10 @@ for (let r = 0; r < rows; r++) {
 }
 
 mkdirSync(resolve(ROOT, "data"), { recursive: true });
-mkdirSync(resolve(ROOT, "public"), { recursive: true });
+mkdirSync(resolve(ROOT, "data"), { recursive: true });
 
 writeFileSync(
-  resolve(ROOT, "public/parcels.json"),
+  resolve(ROOT, "data/parcels.json"),
   JSON.stringify({ type: "FeatureCollection", source: "샘플 데이터 (실제 지적도 아님)", features }, null, 0),
 );
 

@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 const fail = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
 /**
- * 구역을 바꾸는 요청은 로그인된 관리자만 — 화면에서 버튼을 숨기는 것만으로는 못 막는다.
- * 통과하면 변경 기록에 남길 아이디를 돌려준다.
+ * 구역은 관리자번호로 들어온 사람만 — 화면을 잠그는 것만으로는 API 를 직접 부르는 것을 못 막는다.
+ * 통과하면 변경 기록에 남길 이름을 돌려준다.
  */
 async function requireAdmin(): Promise<{ user: string } | { denied: NextResponse }> {
   const user = await currentAdmin();
-  return user ? { user } : { denied: fail("관리자 로그인이 필요합니다", 401) };
+  return user ? { user } : { denied: fail("관리자번호를 넣고 들어와야 합니다", 401) };
 }
 
 async function body<T>(req: Request): Promise<T | null> {
@@ -26,10 +26,11 @@ async function body<T>(req: Request): Promise<T | null> {
 }
 
 export async function GET(req: Request) {
-  // ?history=1 — 구역·명부 변경 기록 (관리자만)
+  // 구역도 관리자번호로 들어온 사람에게만 보인다
+  const auth = await requireAdmin();
+  if ("denied" in auth) return auth.denied;
+  // ?history=1 — 구역·명부 변경 기록
   if (new URL(req.url).searchParams.has("history")) {
-    const auth = await requireAdmin();
-    if ("denied" in auth) return auth.denied;
     return NextResponse.json(await readHistory());
   }
   return NextResponse.json(await readZones());

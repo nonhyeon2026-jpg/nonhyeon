@@ -1,5 +1,5 @@
 /**
- * VWorld 건물정보(LT_C_BLDGINFO) → public/parcels.json 병합.
+ * VWorld 건물정보(LT_C_BLDGINFO) → data/parcels.json 병합.
  *
  *   VWORLD_KEY=... npm run import:buildings
  *
@@ -144,7 +144,7 @@ async function fetchBuildings() {
 }
 
 /* ── 필지 격자 색인 ── */
-const parcels = JSON.parse(readFileSync(resolve(ROOT, "public/parcels.json"), "utf8"));
+const parcels = JSON.parse(readFileSync(resolve(ROOT, "data/parcels.json"), "utf8"));
 const CELL = 0.002;
 const cellKey = (lng, lat) => `${Math.floor(lng / CELL)}:${Math.floor(lat / CELL)}`;
 const grid = new Map();
@@ -293,7 +293,7 @@ for (const f of parcels.features) {
 }
 
 parcels.source = `${String(parcels.source ?? "").replace(/ \+ 건물정보.*$/, "")} + 건물정보 (${LAYER})`;
-writeFileSync(resolve(ROOT, "public/parcels.json"), JSON.stringify(parcels, null, 0));
+writeFileSync(resolve(ROOT, "data/parcels.json"), JSON.stringify(parcels, null, 0));
 
 const usageCount = {};
 for (const f of parcels.features) {

@@ -1,5 +1,5 @@
 /**
- * VWorld 용도지역(LT_C_UQ111) → public/parcels.json 병합.
+ * VWorld 용도지역(LT_C_UQ111) → data/parcels.json 병합.
  *
  *   VWORLD_KEY=... npm run import:zoning
  *   (PowerShell)  $env:VWORLD_KEY="키"; npm run import:zoning
@@ -21,7 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PARCELS_PATH = resolve(ROOT, "public/parcels.json");
+const PARCELS_PATH = resolve(ROOT, "data/parcels.json");
 
 const KEY = process.env.VWORLD_KEY;
 const DOMAIN = process.env.VWORLD_DOMAIN ?? "http://localhost";
@@ -188,4 +188,4 @@ for (const [name, n] of Object.entries(tally).sort((a, b) => b[1] - a[1])) {
   console.log(`  ${name.padEnd(12, " ")} ${n.toLocaleString()}`);
 }
 console.log(`\n두 용도지역 이상에 걸친 필지 ${mixed}개 · 용도지역을 못 찾은 필지 ${missing}개`);
-console.log("완료 → public/parcels.json");
+console.log("완료 → data/parcels.json");

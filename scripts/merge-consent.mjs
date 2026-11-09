@@ -27,7 +27,7 @@ import { findUnit, namesInManyParcels, readRoster, splitUnits, unitKey } from ".
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CREDENTIALS = resolve(ROOT, "atlas-credentials.env");
-const PARCELS = resolve(ROOT, "public/parcels.json");
+const PARCELS = resolve(ROOT, "data/parcels.json");
 const CACHE = resolve(ROOT, "data/bldrgst-cache.json");
 const DB_NAME = process.env.MONGODB_DB || "nonhyun";
 const COLLECTION = "consent";
