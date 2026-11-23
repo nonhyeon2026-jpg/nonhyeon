@@ -437,8 +437,8 @@ export default function NaverMapView({
         };
       } else if (ratio !== null) {
         // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 색을 나눈다
-        // 제출 표시를 숨겼으면 차분한 색으로 깐다
-        const u = (hideConsent ? calmZoneStyle : unsubmittedStyle)(f.properties.zoning);
+        // 제출 표시를 숨겼으면 구역 전체를 밝은 녹색 한 가지로 깐다
+        const u = hideConsent ? calmZoneStyle() : unsubmittedStyle(f.properties.zoning);
         style = {
           fillColor: u.color,
           fillOpacity: u.fillOpacity,

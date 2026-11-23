@@ -163,7 +163,7 @@ export default function MapView({
         // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 색을 나눈다
         const unsubmitted =
           consentRatio !== null && !submitted
-            ? (hideConsent ? calmZoneStyle : unsubmittedStyle)(props.zoning)
+            ? hideConsent ? calmZoneStyle() : unsubmittedStyle(props.zoning)
             : null;
 
         const base =

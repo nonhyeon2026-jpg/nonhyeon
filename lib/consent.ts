@@ -548,29 +548,17 @@ export function unsubmittedStyle(zoning?: string | null): {
 }
 
 /**
- * 블록별 표시에서 지번별 제출 색을 숨겼을 때의 구역 필지 색 [hue, 채도, 명도].
- * 블록 표시와 검은 덮개가 주인공이므로 바닥은 채도를 낮춘 차분한 색으로 깐다
- * — 1종 연보라빛 파랑 · 2종 청록 회색 · 3종 모래색. 빨강·초록은 쓰지 않는다.
+ * 블록별 표시에서 지번별 제출 색을 숨겼을 때의 구역 필지 색.
+ * 블록 표시가 주인공이므로 구역은 1·2·3종을 가르지 않고 밝은 녹색 한 가지로 깐다.
  */
-const CALM_CLASS_COLOR: Record<ResidentialClass, [number, number, number]> = {
-  1: [228, 0.45, 0.62],
-  2: [192, 0.4, 0.48],
-  3: [38, 0.45, 0.56],
-};
+export const HIDDEN_CONSENT_ZONE_COLOR = "#4ade80";
 
-export function calmResidentialColor(cls: ResidentialClass): string {
-  return hslToHex(...CALM_CLASS_COLOR[cls]);
-}
-
-export function calmZoneStyle(zoning?: string | null): {
+export function calmZoneStyle(): {
   color: string;
   fillOpacity: number;
   strokeOpacity: number;
 } {
-  const cls = residentialClass(zoning);
-  // 제출 색이 빠진 자리라 바닥이 비어 보이지 않게 일반 미제출 필지(0.3)보다 진하게 채운다
-  if (!cls) return { color: hslToHex(215, 0.18, 0.52), fillOpacity: 0.45, strokeOpacity: 0.8 };
-  return { color: calmResidentialColor(cls), fillOpacity: 0.55, strokeOpacity: 0.9 };
+  return { color: HIDDEN_CONSENT_ZONE_COLOR, fillOpacity: 0.5, strokeOpacity: 0.9 };
 }
 
 function hslToHex(h: number, s: number, l: number): string {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   CONSENT_GRADIENT,
-  calmResidentialColor,
+  HIDDEN_CONSENT_ZONE_COLOR,
   consentColor,
   pct,
   residentialColor,
@@ -246,23 +246,28 @@ function ZoneCard({
           </>
         )}
         {/* 제출이 없는 구역 필지는 용도지역별로 색이 조금씩 다르다 */}
-        <div
-          className={`flex items-center gap-2.5 whitespace-nowrap text-[10px] text-slate-500 ${hideConsent ? "" : "mt-1.5"}`}
-        >
-          <span>{hideConsent ? "구역 필지 · 일반주거" : "제출 없음 · 일반주거"}</span>
-          {RESIDENTIAL_CLASSES.map((cls) => (
-            <span key={cls} className="flex items-center gap-1">
-              <span
-                className="h-2.5 w-2.5 rounded-sm"
-                style={{
-                  background: hideConsent ? calmResidentialColor(cls) : residentialColor(cls),
-                  opacity: 0.9,
-                }}
-              />
-              {cls}종
-            </span>
-          ))}
-        </div>
+        {hideConsent ? (
+          <div className="flex items-center gap-1 text-[10px] text-slate-500">
+            <span
+              className="h-2.5 w-2.5 rounded-sm"
+              style={{ background: HIDDEN_CONSENT_ZONE_COLOR, opacity: 0.9 }}
+            />
+            구역 필지
+          </div>
+        ) : (
+          <div className="mt-1.5 flex items-center gap-2.5 whitespace-nowrap text-[10px] text-slate-500">
+            <span>제출 없음 · 일반주거</span>
+            {RESIDENTIAL_CLASSES.map((cls) => (
+              <span key={cls} className="flex items-center gap-1">
+                <span
+                  className="h-2.5 w-2.5 rounded-sm"
+                  style={{ background: residentialColor(cls), opacity: 0.9 }}
+                />
+                {cls}종
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {adminMode ? (
