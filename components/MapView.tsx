@@ -64,6 +64,7 @@ export default function MapView({
   selected,
   blocks,
   blockRows,
+  hideConsent = false,
   owners,
   basemap,
   flyTo,
@@ -82,6 +83,8 @@ export default function MapView({
   blocks: BlockConsent[] | null;
   /** 블록 표시에 띄울 줄 (면적 동의율·소유자 동의율·동의자 수) */
   blockRows: BlockRowKey[];
+  /** 지번별 제출 색(초록 계열)과 구역 밖 점선을 끄고 구역 필지를 1·2·3종 색으로만 칠한다 */
+  hideConsent?: boolean;
   /** 필지별 추정 소유자 수. null 이면 표시를 그리지 않는다 */
   owners: OwnerMark[] | null;
   basemap: Basemap;
@@ -140,6 +143,8 @@ export default function MapView({
         const isSelected = selected.has(props.pnu);
 
         const consent = consentMap[props.pnu];
+        // 제출 표시를 끄면 명부가 없는 필지처럼 칠한다 (구역 밖 점선도 함께 빠진다). 툴팁은 그대로 둔다
+        const paint = hideConsent ? undefined : consent;
 
         /**
          * 구역에 편입된 필지는 명부에 한 호도 없어도 0% 로 칠한다.
@@ -147,10 +152,10 @@ export default function MapView({
          */
         // 반올림하지 않는다 — 0.4% 가 0% 로 접히면 제출이 있는 필지가 빨강이 된다
         // 명부에 올랐어도 한 호도 안 냈으면(제출 0) 참여의향서 없는 필지와 같이 칠한다
-        const submitted = consent && consent.submitted > 0;
+        const submitted = paint && paint.submitted > 0;
         const consentRatio = submitted
-          ? (consent.submitted / consent.total) * 100
-          : inVisibleZone || consent
+          ? (paint.submitted / paint.total) * 100
+          : inVisibleZone || paint
             ? 0
             : null;
 
@@ -186,7 +191,7 @@ export default function MapView({
             };
 
         // 구역 밖 제출 — 채움은 제출률 색 그대로, 테두리만 보라 점선으로 가른다
-        const outside = consent && isOutside(props.pnu, consent, zoneOf);
+        const outside = paint && isOutside(props.pnu, paint, zoneOf);
         const styled = outside
           ? { ...base, color: OUTSIDE_STROKE, weight: 2, opacity: 0.95, dashArray: "4 4" }
           : base;

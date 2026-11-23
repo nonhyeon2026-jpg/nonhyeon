@@ -101,6 +101,7 @@ export default function NaverMapView({
   selected,
   blocks,
   blockRows,
+  hideConsent = false,
   owners,
   showCadastral,
   flyTo,
@@ -123,6 +124,8 @@ export default function NaverMapView({
   blocks: BlockConsent[] | null;
   /** 블록 표시에 띄울 줄 (면적 동의율·소유자 동의율·동의자 수) */
   blockRows: BlockRowKey[];
+  /** 지번별 제출 색(초록 계열)과 구역 밖 점선을 끄고 구역 필지를 1·2·3종 색으로만 칠한다 */
+  hideConsent?: boolean;
   /** 필지별 추정 소유자 수. null 이면 표시를 그리지 않는다 */
   owners: OwnerMark[] | null;
   showCadastral: boolean;
@@ -394,7 +397,8 @@ export default function NaverMapView({
       const zone = zoneOf.get(pnu);
       const inVisibleZone = zone ? visibleZoneIds.has(zone.id) : false;
       const isSelected = selected.has(pnu);
-      const consent = consentMap[pnu];
+      // 제출 표시를 끄면 명부가 없는 필지처럼 칠한다 (구역 밖 점선도 함께 빠진다)
+      const consent = hideConsent ? undefined : consentMap[pnu];
       /**
        * 구역에 편입된 필지는 명부에 한 호도 없어도 0% 로 칠한다.
        * 회색으로 두면 "자료 없음" 과 "아무도 안 냈음" 이 구분되지 않는다.
@@ -497,6 +501,7 @@ export default function NaverMapView({
     visibleZoneIds,
     selected,
     consentMap,
+    hideConsent,
     polygonFor,
     boxes,
   ]);

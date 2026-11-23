@@ -98,6 +98,9 @@ export default function AppShell({
           : v
         : BLOCK_ROW_KEYS.filter((x) => x === k || v.includes(x)),
     );
+  /** 블록별 표시 중 지번별 제출 색·구역 밖 점선을 숨긴다 */
+  const [hideParcelConsent, setHideParcelConsent] = useState(false);
+  const hideConsent = showBlocks && hideParcelConsent;
   const showOwners = overlay === "owners";
   /** 소유자 숫자를 눌러 고른 필지. 표시를 끄면 그 선택도 풀어 누르기 전으로 돌린다 */
   const ownerPickRef = useRef<string | null>(null);
@@ -614,6 +617,7 @@ ${sample}${more}`)) return;
               selected={selected}
               blocks={blockRatios}
               blockRows={blockRows}
+              hideConsent={hideConsent}
               owners={ownerMarks}
               showCadastral={showCadastral}
               flyTo={flyTo}
@@ -635,6 +639,7 @@ ${sample}${more}`)) return;
               selected={selected}
               blocks={blockRatios}
               blockRows={blockRows}
+              hideConsent={hideConsent}
               owners={ownerMarks}
               basemap={basemap}
               flyTo={flyTo}
@@ -656,7 +661,13 @@ ${sample}${more}`)) return;
             {showOutside && (
               <OutsideConsentList outside={outside} propsOf={propsOf} onFocus={focusParcel} compact />
             )}
-            {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} compact />}
+            {showBlocks && <BlockLegend
+                rows={blockRows}
+                onToggle={toggleBlockRow}
+                hideConsent={hideParcelConsent}
+                onHideConsentChange={setHideParcelConsent}
+                compact
+              />}
             <ConsentSummary
               zones={zones}
               consent={consent}
@@ -737,7 +748,12 @@ ${sample}${more}`)) return;
             {showOutside && (
               <OutsideConsentList outside={outside} propsOf={propsOf} onFocus={focusParcel} />
             )}
-            {showBlocks && <BlockLegend rows={blockRows} onToggle={toggleBlockRow} />}
+            {showBlocks && <BlockLegend
+                rows={blockRows}
+                onToggle={toggleBlockRow}
+                hideConsent={hideParcelConsent}
+                onHideConsentChange={setHideParcelConsent}
+              />}
 
             {selected.size === 0 && (
               <ConsentSummary
