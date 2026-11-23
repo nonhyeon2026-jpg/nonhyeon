@@ -553,9 +553,9 @@ export function unsubmittedStyle(zoning?: string | null): {
  * — 1종 연보라빛 파랑 · 2종 청록 회색 · 3종 모래색. 빨강·초록은 쓰지 않는다.
  */
 const CALM_CLASS_COLOR: Record<ResidentialClass, [number, number, number]> = {
-  1: [228, 0.38, 0.66],
-  2: [192, 0.32, 0.5],
-  3: [38, 0.34, 0.6],
+  1: [228, 0.45, 0.62],
+  2: [192, 0.4, 0.48],
+  3: [38, 0.45, 0.56],
 };
 
 export function calmResidentialColor(cls: ResidentialClass): string {
@@ -568,8 +568,9 @@ export function calmZoneStyle(zoning?: string | null): {
   strokeOpacity: number;
 } {
   const cls = residentialClass(zoning);
-  if (!cls) return { color: hslToHex(215, 0.14, 0.55), fillOpacity: 0.22, strokeOpacity: 0.55 };
-  return { color: calmResidentialColor(cls), fillOpacity: 0.3, strokeOpacity: 0.7 };
+  // 제출 색이 빠진 자리라 바닥이 비어 보이지 않게 일반 미제출 필지(0.3)보다 진하게 채운다
+  if (!cls) return { color: hslToHex(215, 0.18, 0.52), fillOpacity: 0.45, strokeOpacity: 0.8 };
+  return { color: calmResidentialColor(cls), fillOpacity: 0.55, strokeOpacity: 0.9 };
 }
 
 function hslToHex(h: number, s: number, l: number): string {
