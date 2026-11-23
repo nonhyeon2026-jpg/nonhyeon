@@ -549,16 +549,17 @@ export function unsubmittedStyle(zoning?: string | null): {
 
 /**
  * 블록별 표시에서 지번별 제출 색을 숨겼을 때의 구역 필지 색.
- * 블록 표시가 주인공이므로 구역은 1·2·3종을 가르지 않고 밝은 녹색 한 가지로 깐다.
+ * 블록 표시가 주인공이므로 구역은 1·2·3종을 가르지 않고 톤을 낮춘 녹색 한 가지로 깐다
+ * (밝은 녹색은 블록 표시보다 눈에 띄어 물렸다).
  */
-export const HIDDEN_CONSENT_ZONE_COLOR = "#4ade80";
+export const HIDDEN_CONSENT_ZONE_COLOR = "#5b9a72";
 
 export function calmZoneStyle(): {
   color: string;
   fillOpacity: number;
   strokeOpacity: number;
 } {
-  return { color: HIDDEN_CONSENT_ZONE_COLOR, fillOpacity: 0.5, strokeOpacity: 0.9 };
+  return { color: HIDDEN_CONSENT_ZONE_COLOR, fillOpacity: 0.45, strokeOpacity: 0.9 };
 }
 
 function hslToHex(h: number, s: number, l: number): string {
