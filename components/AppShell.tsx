@@ -764,6 +764,7 @@ ${sample}${more}`)) return;
                 adminMode={adminMode}
                 busy={busy}
                 outside={outside}
+                hideConsent={hideConsent}
                 onSetOwners={setZoneOwners}
               />
             )}

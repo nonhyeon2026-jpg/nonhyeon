@@ -14,6 +14,7 @@ import {
   consentFillOpacity,
   consentStrokeOpacity,
   unsubmittedStyle,
+  calmZoneStyle,
 } from "@/lib/consent";
 import type { ConsentMap } from "@/lib/consent";
 import { isOutside, OUTSIDE_STROKE } from "./outsideStyle";
@@ -161,7 +162,9 @@ export default function MapView({
 
         // 제출이 없는 구역 필지는 용도지역(1·2·3종)별로 색을 나눈다
         const unsubmitted =
-          consentRatio !== null && !submitted ? unsubmittedStyle(props.zoning) : null;
+          consentRatio !== null && !submitted
+            ? (hideConsent ? calmZoneStyle : unsubmittedStyle)(props.zoning)
+            : null;
 
         const base =
           submitted

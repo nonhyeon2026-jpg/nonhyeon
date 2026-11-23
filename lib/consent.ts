@@ -547,6 +547,31 @@ export function unsubmittedStyle(zoning?: string | null): {
   return { color: residentialColor(cls), fillOpacity: 0.3, strokeOpacity: 0.7 };
 }
 
+/**
+ * 블록별 표시에서 지번별 제출 색을 숨겼을 때의 구역 필지 색 [hue, 채도, 명도].
+ * 블록 표시와 검은 덮개가 주인공이므로 바닥은 채도를 낮춘 차분한 색으로 깐다
+ * — 1종 연보라빛 파랑 · 2종 청록 회색 · 3종 모래색. 빨강·초록은 쓰지 않는다.
+ */
+const CALM_CLASS_COLOR: Record<ResidentialClass, [number, number, number]> = {
+  1: [228, 0.38, 0.66],
+  2: [192, 0.32, 0.5],
+  3: [38, 0.34, 0.6],
+};
+
+export function calmResidentialColor(cls: ResidentialClass): string {
+  return hslToHex(...CALM_CLASS_COLOR[cls]);
+}
+
+export function calmZoneStyle(zoning?: string | null): {
+  color: string;
+  fillOpacity: number;
+  strokeOpacity: number;
+} {
+  const cls = residentialClass(zoning);
+  if (!cls) return { color: hslToHex(215, 0.14, 0.55), fillOpacity: 0.22, strokeOpacity: 0.55 };
+  return { color: calmResidentialColor(cls), fillOpacity: 0.3, strokeOpacity: 0.7 };
+}
+
 function hslToHex(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));

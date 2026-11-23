@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   CONSENT_GRADIENT,
+  calmResidentialColor,
   consentColor,
   pct,
   residentialColor,
@@ -32,12 +33,15 @@ export default function ConsentSummary({
   busy,
   compact = false,
   outside,
+  hideConsent = false,
   onSetOwners,
 }: {
   zones: Zone[];
   visibleZoneIds: Set<string>;
   propsOf: Map<string, ParcelProps>;
   consent: ConsentMap;
+  /** 블록별 표시에서 지번별 제출 색을 숨겼을 때 — 범례도 지도와 같은 차분한 색으로 */
+  hideConsent?: boolean;
   adminMode: boolean;
   busy: boolean;
   /** 좁은 화면용 — 두 비율만 한 줄로 (범례·총 소유자 입력은 넓은 화면에만) */
@@ -62,6 +66,7 @@ export default function ConsentSummary({
             consent={consent}
             adminMode={adminMode}
             busy={busy}
+            hideConsent={hideConsent}
             onSetOwners={onSetOwners}
           />
         ),
@@ -127,6 +132,7 @@ function ZoneCard({
   consent,
   adminMode,
   busy,
+  hideConsent,
   onSetOwners,
 }: {
   zone: Zone;
@@ -134,6 +140,7 @@ function ZoneCard({
   consent: ConsentMap;
   adminMode: boolean;
   busy: boolean;
+  hideConsent: boolean;
   onSetOwners: (zoneId: string, owners: number) => void;
 }) {
   const s = summarizeZone(zone.parcels, propsOf, consent, zone.owners);
@@ -225,22 +232,32 @@ function ZoneCard({
       </div>
 
       <div className="mt-2.5 border-t border-slate-800 pt-2">
-        <div
-          className="h-2.5 w-full rounded-sm"
-          style={{ background: CONSENT_GRADIENT, opacity: 0.9 }}
-        />
-        <div className="mt-1 flex justify-between text-[10px] text-slate-500">
-          <span>필지별 제출률 0%</span>
-          <span>100%</span>
-        </div>
+        {/* 제출 색을 숨겼으면 지도에 없는 제출률 막대는 빼고 1·2·3종 색만 남긴다 */}
+        {!hideConsent && (
+          <>
+            <div
+              className="h-2.5 w-full rounded-sm"
+              style={{ background: CONSENT_GRADIENT, opacity: 0.9 }}
+            />
+            <div className="mt-1 flex justify-between text-[10px] text-slate-500">
+              <span>필지별 제출률 0%</span>
+              <span>100%</span>
+            </div>
+          </>
+        )}
         {/* 제출이 없는 구역 필지는 용도지역별로 색이 조금씩 다르다 */}
-        <div className="mt-1.5 flex items-center gap-2.5 whitespace-nowrap text-[10px] text-slate-500">
-          <span>제출 없음 · 일반주거</span>
+        <div
+          className={`flex items-center gap-2.5 whitespace-nowrap text-[10px] text-slate-500 ${hideConsent ? "" : "mt-1.5"}`}
+        >
+          <span>{hideConsent ? "구역 필지 · 일반주거" : "제출 없음 · 일반주거"}</span>
           {RESIDENTIAL_CLASSES.map((cls) => (
             <span key={cls} className="flex items-center gap-1">
               <span
                 className="h-2.5 w-2.5 rounded-sm"
-                style={{ background: residentialColor(cls), opacity: 0.9 }}
+                style={{
+                  background: hideConsent ? calmResidentialColor(cls) : residentialColor(cls),
+                  opacity: 0.9,
+                }}
               />
               {cls}종
             </span>
