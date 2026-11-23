@@ -21,3 +21,7 @@ lib/consent.json
 
 # 토지소유정보 호별 변동 내역. npm run import:possession 이 다시 받는다
 data/possession-cache.json
+
+# 인터넷등기소 워커 — 로그인 세션용 크롬 프로필과 열람 결과(개인정보)
+.iros-chrome/
+iros-out/
